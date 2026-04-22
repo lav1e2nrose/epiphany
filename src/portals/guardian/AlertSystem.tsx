@@ -5,22 +5,16 @@ export function AlertSystem(): JSX.Element {
   const dismissAlert = useAppStore((state) => state.dismissAlert)
   const pushAlert = useAppStore((state) => state.pushAlert)
   const settings = useAppStore((state) => state.settings)
-  const updateSettings = useAppStore((state) => state.updateSettings)
 
   return (
     <div className="grid h-full grid-cols-2 gap-4">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报警策略</h2>
         <div className="mt-3 space-y-3 text-sm">
-          <label className="flex items-center justify-between">报警音效
-            <input type="checkbox" checked={settings.alertSound} onChange={(event) => updateSettings({ alertSound: event.target.checked })} />
-          </label>
-          <label className="flex items-center justify-between">预警提前量（分钟）
-            <input type="number" className="w-20 rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.warningLeadMinutes} onChange={(event) => updateSettings({ warningLeadMinutes: Number(event.target.value) })} />
-          </label>
-          <label className="flex items-center justify-between">监护人手机号
-            <input className="w-36 rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.caregiverPhone} onChange={(event) => updateSettings({ caregiverPhone: event.target.value })} />
-          </label>
+          <div className="flex items-center justify-between">报警音效 <span>{settings.alertSound ? '开' : '关'}</span></div>
+          <div className="flex items-center justify-between">预警提前量（分钟） <span>{settings.warningLeadMinutes}</span></div>
+          <div className="flex items-center justify-between">监护人手机号 <span>{settings.caregiverPhone || '未设置'}</span></div>
+          <div className="text-xs text-text-muted">以上策略可在 Settings 页面统一配置</div>
         </div>
         <div className="mt-4 flex gap-2 text-xs">
           <button className="rounded border border-border-default px-2 py-1" onClick={() => pushAlert({ id: `${Date.now()}-warn`, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: Date.now() })}>触发黄色报警测试</button>

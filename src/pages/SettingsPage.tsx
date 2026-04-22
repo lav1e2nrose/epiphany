@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../store'
 
+const FALLBACK_SERIAL_PORT = 'COM3'
+
 export function SettingsPage(): JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const setDataSourceMode = useAppStore((state) => state.setDataSourceMode)
@@ -76,7 +78,7 @@ export function SettingsPage(): JSX.Element {
           </label>
           <label>串口
             <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.serialPort} onChange={(event) => updateSettings({ serialPort: event.target.value })}>
-              {(serialPorts.length > 0 ? serialPorts : [settings.serialPort || 'COM3']).map((port) => (
+              {(serialPorts.length > 0 ? serialPorts : [settings.serialPort || FALLBACK_SERIAL_PORT]).map((port) => (
                 <option key={port} value={port}>{port}</option>
               ))}
             </select>
@@ -98,10 +100,38 @@ export function SettingsPage(): JSX.Element {
           <button className="rounded border border-border-default px-3 py-1 disabled:opacity-50" onClick={() => void testConnection()} disabled={loading}>
             {loading ? '连接测试中...' : '测试连接'}
           </button>
-          <button className="rounded border border-border-default px-3 py-1" onClick={() => void window.epiphany?.listSerialPorts().then((ports) => setSerialPorts(ports ?? []))}>
+          <button
+            className="rounded border border-border-default px-3 py-1"
+            onClick={() =>
+              void window.epiphany
+                ?.listSerialPorts()
+                .then((ports) => {
+                  setSerialPorts(ports ?? [])
+                  setStatus('串口列表已刷新')
+                })
+                .catch((error: unknown) => {
+                  const message = error instanceof Error ? error.message : '串口扫描失败'
+                  setStatus(`串口扫描失败 ✕ ${message}`)
+                })
+            }
+          >
             刷新串口
           </button>
-          <button className="rounded border border-border-default px-3 py-1" onClick={() => void window.epiphany?.scanBleDevices().then((devices) => setBleDevices(devices ?? []))}>
+          <button
+            className="rounded border border-border-default px-3 py-1"
+            onClick={() =>
+              void window.epiphany
+                ?.scanBleDevices()
+                .then((devices) => {
+                  setBleDevices(devices ?? [])
+                  setStatus('BLE 设备扫描完成')
+                })
+                .catch((error: unknown) => {
+                  const message = error instanceof Error ? error.message : 'BLE 扫描失败'
+                  setStatus(`BLE 扫描失败 ✕ ${message}`)
+                })
+            }
+          >
             扫描 BLE
           </button>
           <span className="text-xs text-text-secondary">{status}</span>
@@ -128,9 +158,6 @@ export function SettingsPage(): JSX.Element {
           </label>
           <label>预警灵敏度
             <input type="range" min={0} max={1} step={0.05} className="mt-3 w-full" value={settings.sensitivity} onChange={(event) => updateSettings({ sensitivity: Number(event.target.value) })} />
-          </label>
-          <label>预警提前量（分钟）
-            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.warningLeadMinutes} onChange={(event) => updateSettings({ warningLeadMinutes: Number(event.target.value) })} />
           </label>
         </div>
       </section>

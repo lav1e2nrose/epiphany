@@ -20,6 +20,14 @@ function toRiskState(score: number): RiskState {
 export function LiveDashboard(): JSX.Element {
   const dataSource = useAppStore((state) => state.dataSource)
   const settings = useAppStore((state) => state.settings)
+  const dataSourceMode = settings.dataSourceMode
+  const websocketUrl = settings.websocketUrl
+  const serialPort = settings.serialPort
+  const baudRate = settings.baudRate
+  const bleDeviceId = settings.bleDeviceId
+  const bandpassLow = settings.bandpassLow
+  const bandpassHigh = settings.bandpassHigh
+  const notchHz = settings.notchHz
   const setConnectionStatus = useAppStore((state) => state.setConnectionStatus)
   const pushFrame = useAppStore((state) => state.pushFrame)
   const frameBuffer = useAppStore((state) => state.frameBuffer)
@@ -28,11 +36,15 @@ export function LiveDashboard(): JSX.Element {
   const pushAlert = useAppStore((state) => state.pushAlert)
   const addEvent = useAppStore((state) => state.addEvent)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
-  const historyRef = useRef<ProcessedFrame[]>([])
+  const historyRef = useRef<ProcessedFrame[]>(frameBuffer)
 
-  useEffect(() => {
-    historyRef.current = frameBuffer
-  }, [frameBuffer])
+  useEffect(
+    () =>
+      useAppStore.subscribe((state) => {
+        historyRef.current = state.frameBuffer
+      }),
+    [],
+  )
 
   useEffect(() => {
     const cache: SignalFrame[] = []
@@ -40,8 +52,8 @@ export function LiveDashboard(): JSX.Element {
       cache.push(frame)
       const windowed = cache.slice(-320)
       const filteredEeg = processor.notchFilter(
-        processor.bandpassFilter(frame.eeg, settings.bandpassLow, settings.bandpassHigh, 256),
-        settings.notchHz,
+        processor.bandpassFilter(frame.eeg, bandpassLow, bandpassHigh, 256),
+        notchHz,
         256,
       )
       const filteredFrame: SignalFrame = {
@@ -64,12 +76,12 @@ export function LiveDashboard(): JSX.Element {
     const unsubscribeError = dataSource.onError(() => setConnectionStatus('error'))
 
     const config: Record<string, unknown> = {}
-    if (settings.dataSourceMode === 'websocket') config.url = settings.websocketUrl
-    if (settings.dataSourceMode === 'serial') {
-      config.port = settings.serialPort
-      config.baudRate = settings.baudRate
+    if (dataSourceMode === 'websocket') config.url = websocketUrl
+    if (dataSourceMode === 'serial') {
+      config.port = serialPort
+      config.baudRate = baudRate
     }
-    if (settings.dataSourceMode === 'ble' && settings.bleDeviceId) config.deviceId = settings.bleDeviceId
+    if (dataSourceMode === 'ble' && bleDeviceId) config.deviceId = bleDeviceId
 
     setConnectionStatus('connecting')
     void dataSource.connect(config).catch(() => setConnectionStatus('error'))
@@ -80,7 +92,7 @@ export function LiveDashboard(): JSX.Element {
       unsubscribeError()
       void dataSource.disconnect()
     }
-  }, [dataSource, pushFrame, setConnectionStatus, settings])
+  }, [bandpassHigh, bandpassLow, baudRate, bleDeviceId, dataSource, dataSourceMode, notchHz, pushFrame, serialPort, setConnectionStatus, websocketUrl])
 
   useEffect(() => {
     if (riskState === 'warning' || riskState === 'seizure') {

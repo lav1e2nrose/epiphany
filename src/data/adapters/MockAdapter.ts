@@ -11,17 +11,19 @@ export class MockAdapter extends BaseAdapter {
   private phaseDuration = 0
   private normalFramesTarget = 1200
   private sampleIntervalMs = 16
+  private cycleMinSec = 60
+  private cycleMaxSec = 120
 
   async connect(config?: Record<string, unknown>): Promise<void> {
     this.setStatus('connecting')
     this.frameTick = 0
     this.phase = 'normal'
     this.phaseDuration = 0
-    const minCycleSec = typeof config?.cycleMinSec === 'number' ? config.cycleMinSec : 60
-    const maxCycleSec = typeof config?.cycleMaxSec === 'number' ? config.cycleMaxSec : 120
+    this.cycleMinSec = typeof config?.cycleMinSec === 'number' ? config.cycleMinSec : 60
+    this.cycleMaxSec = typeof config?.cycleMaxSec === 'number' ? config.cycleMaxSec : 120
     this.sampleIntervalMs = typeof config?.sampleIntervalMs === 'number' ? config.sampleIntervalMs : 16
-    const minFrames = Math.max(60, Math.round((minCycleSec * 1000) / this.sampleIntervalMs))
-    const maxFrames = Math.max(minFrames + 1, Math.round((maxCycleSec * 1000) / this.sampleIntervalMs))
+    const minFrames = Math.max(60, Math.round((this.cycleMinSec * 1000) / this.sampleIntervalMs))
+    const maxFrames = Math.max(minFrames + 1, Math.round((this.cycleMaxSec * 1000) / this.sampleIntervalMs))
     this.normalFramesTarget = minFrames + Math.floor(Math.random() * (maxFrames - minFrames))
     this.setStatus('mock')
 
@@ -47,8 +49,8 @@ export class MockAdapter extends BaseAdapter {
     this.phase = next
     this.phaseDuration = 0
     if (next === 'normal') {
-      const minFrames = Math.max(300, Math.round((60 * 1000) / this.sampleIntervalMs))
-      const maxFrames = Math.max(minFrames + 1, Math.round((120 * 1000) / this.sampleIntervalMs))
+      const minFrames = Math.max(60, Math.round((this.cycleMinSec * 1000) / this.sampleIntervalMs))
+      const maxFrames = Math.max(minFrames + 1, Math.round((this.cycleMaxSec * 1000) / this.sampleIntervalMs))
       this.normalFramesTarget = minFrames + Math.floor(Math.random() * (maxFrames - minFrames))
     }
   }
