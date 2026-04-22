@@ -23,6 +23,7 @@ export interface AppSettings {
   websocketUrl: string
   serialPort: string
   baudRate: number
+  bleDeviceId: string
   notchHz: 50 | 60
   bandpassLow: number
   bandpassHigh: number

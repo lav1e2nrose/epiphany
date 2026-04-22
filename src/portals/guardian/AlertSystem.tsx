@@ -1,20 +1,39 @@
+import { useAppStore } from '../../store'
+
 export function AlertSystem(): JSX.Element {
+  const alerts = useAppStore((state) => state.alerts)
+  const dismissAlert = useAppStore((state) => state.dismissAlert)
+  const pushAlert = useAppStore((state) => state.pushAlert)
+  const settings = useAppStore((state) => state.settings)
+
   return (
     <div className="grid h-full grid-cols-2 gap-4">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报警策略</h2>
         <div className="mt-3 space-y-3 text-sm">
-          <label className="flex items-center justify-between">黄色预警 Toast <input type="checkbox" defaultChecked /></label>
-          <label className="flex items-center justify-between">红色覆盖报警 <input type="checkbox" defaultChecked /></label>
-          <label className="flex items-center justify-between">短信通知 <input type="checkbox" defaultChecked /></label>
-          <label className="flex items-center justify-between">电话通知 <input type="checkbox" /></label>
+          <div className="flex items-center justify-between">报警音效 <span>{settings.alertSound ? '开' : '关'}</span></div>
+          <div className="flex items-center justify-between">预警提前量（分钟） <span>{settings.warningLeadMinutes}</span></div>
+          <div className="flex items-center justify-between">监护人手机号 <span>{settings.caregiverPhone || '未设置'}</span></div>
+          <div className="text-xs text-text-muted">以上策略可在 Settings 页面统一配置</div>
+        </div>
+        <div className="mt-4 flex gap-2 text-xs">
+          <button className="rounded border border-border-default px-2 py-1" onClick={() => pushAlert({ id: `${Date.now()}-warn`, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: Date.now() })}>触发黄色报警测试</button>
+          <button className="rounded border border-danger/70 px-2 py-1 text-danger" onClick={() => pushAlert({ id: `${Date.now()}-danger`, type: 'error', title: '红色报警测试', message: '监测到发作事件，建议立即处理', timestamp: Date.now(), sticky: true })}>触发红色报警测试</button>
         </div>
       </section>
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报警队列</h2>
         <div className="mt-3 space-y-2 text-sm text-text-secondary">
-          <div>10:23 Warning · 自动关闭 4s</div>
-          <div>11:02 Seizure · 需人工确认</div>
+          {alerts.length === 0 && <div>暂无报警</div>}
+          {[...alerts].reverse().slice(0, 12).map((alert) => (
+            <div key={alert.id} className="flex items-center justify-between rounded border border-border-subtle px-2 py-1">
+              <div>
+                <div className="text-text-primary">{alert.title}</div>
+                <div className="text-xs">{new Date(alert.timestamp).toLocaleString()} · {alert.type.toUpperCase()}</div>
+              </div>
+              <button className="text-xs hover:text-text-primary" onClick={() => dismissAlert(alert.id)}>关闭</button>
+            </div>
+          ))}
         </div>
       </section>
     </div>

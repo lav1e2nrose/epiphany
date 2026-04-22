@@ -9,24 +9,34 @@ export class MockAdapter extends BaseAdapter {
   private frameTick = 0
   private phase: Phase = 'normal'
   private phaseDuration = 0
+  private normalFramesTarget = 1200
+  private sampleIntervalMs = 16
+  private cycleMinSec = 60
+  private cycleMaxSec = 120
 
-  async connect(): Promise<void> {
+  async connect(config?: Record<string, unknown>): Promise<void> {
     this.setStatus('connecting')
     this.frameTick = 0
     this.phase = 'normal'
     this.phaseDuration = 0
+    this.cycleMinSec = typeof config?.cycleMinSec === 'number' ? config.cycleMinSec : 60
+    this.cycleMaxSec = typeof config?.cycleMaxSec === 'number' ? config.cycleMaxSec : 120
+    this.sampleIntervalMs = typeof config?.sampleIntervalMs === 'number' ? config.sampleIntervalMs : 16
+    const minFrames = Math.max(60, Math.round((this.cycleMinSec * 1000) / this.sampleIntervalMs))
+    const maxFrames = Math.max(minFrames + 1, Math.round((this.cycleMaxSec * 1000) / this.sampleIntervalMs))
+    this.normalFramesTarget = minFrames + Math.floor(Math.random() * (maxFrames - minFrames))
     this.setStatus('mock')
 
     this.timer = window.setInterval(() => {
       this.frameTick += 1
       this.phaseDuration += 1
-      if (this.phase === 'normal' && this.phaseDuration > 1200) this.switchPhase('preictal')
+      if (this.phase === 'normal' && this.phaseDuration > this.normalFramesTarget) this.switchPhase('preictal')
       if (this.phase === 'preictal' && this.phaseDuration > 360) this.switchPhase('seizure')
       if (this.phase === 'seizure' && this.phaseDuration > 240) this.switchPhase('recovery')
       if (this.phase === 'recovery' && this.phaseDuration > 480) this.switchPhase('normal')
 
       this.emitFrame(this.createFrame())
-    }, 16)
+    }, this.sampleIntervalMs)
   }
 
   async disconnect(): Promise<void> {
@@ -38,6 +48,11 @@ export class MockAdapter extends BaseAdapter {
   private switchPhase(next: Phase): void {
     this.phase = next
     this.phaseDuration = 0
+    if (next === 'normal') {
+      const minFrames = Math.max(60, Math.round((this.cycleMinSec * 1000) / this.sampleIntervalMs))
+      const maxFrames = Math.max(minFrames + 1, Math.round((this.cycleMaxSec * 1000) / this.sampleIntervalMs))
+      this.normalFramesTarget = minFrames + Math.floor(Math.random() * (maxFrames - minFrames))
+    }
   }
 
   private noise(scale = 1): number {

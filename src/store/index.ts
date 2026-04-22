@@ -4,6 +4,9 @@ import type { AppSettings, Patient, Portal, User } from '../types/user'
 import type { ConnectionStatus, IDataSource } from '../data/IDataSource'
 import type { ProcessedFrame, RiskState } from '../types/signal'
 import { MockAdapter } from '../data/adapters/MockAdapter'
+import { WebSocketAdapter } from '../data/adapters/WebSocketAdapter'
+import { SerialAdapter } from '../data/adapters/SerialAdapter'
+import { BLEAdapter } from '../data/adapters/BLEAdapter'
 
 const MAX_FRAMES = 7680
 
@@ -12,6 +15,7 @@ const defaultSettings: AppSettings = {
   websocketUrl: 'ws://localhost:8080/stream',
   serialPort: 'COM3',
   baudRate: 115200,
+  bleDeviceId: '',
   notchHz: 50,
   bandpassLow: 0.5,
   bandpassHigh: 70,
@@ -36,7 +40,9 @@ const demoPatients: Patient[] = [
 export interface AppStore {
   dataSource: IDataSource
   connectionStatus: ConnectionStatus
+  setConnectionStatus: (status: ConnectionStatus) => void
   setDataSource: (source: IDataSource) => void
+  setDataSourceMode: (mode: AppSettings['dataSourceMode']) => void
 
   frameBuffer: ProcessedFrame[]
   latestFrame: ProcessedFrame | null
@@ -63,10 +69,26 @@ export interface AppStore {
   updateSettings: (patch: Partial<AppSettings>) => void
 }
 
+function createDataSource(mode: AppSettings['dataSourceMode']): IDataSource {
+  if (mode === 'websocket') return new WebSocketAdapter()
+  if (mode === 'serial') return new SerialAdapter()
+  if (mode === 'ble') return new BLEAdapter()
+  return new MockAdapter()
+}
+
 export const useAppStore = create<AppStore>((set) => ({
   dataSource: new MockAdapter(),
   connectionStatus: 'disconnected',
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
   setDataSource: (source) => set({ dataSource: source }),
+  setDataSourceMode: (mode) => {
+    set((state) => ({
+      settings: { ...state.settings, dataSourceMode: mode },
+      dataSource: createDataSource(mode),
+      connectionStatus: 'disconnected',
+    }))
+    void window.epiphany?.updateSettings({ dataSourceMode: mode })
+  },
 
   frameBuffer: [],
   latestFrame: null,
