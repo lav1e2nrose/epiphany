@@ -1,0 +1,942 @@
+你是一名顶级全栈工程师，同时具备医疗级软件的 UI/UX 设计审美。
+你现在要从零构建一个名为 **"灵犀妙探"** 的 PC 桌面应用程序。
+
+这不是网页，不是 demo，不是大学作业。
+这是一款面向医院和家庭的**医疗级癫痫全周期监测与管理平台**，代码质量和视觉标准对标 $100,000 级别的医疗 SaaS 产品。
+
+---
+
+## PART 0 · 技术栈（不可妥协）
+
+```
+桌面框架:    Electron 28+（frameless window，自定义标题栏）
+前端框架:    React 18 + TypeScript（严格模式，零 any）
+构建工具:    Vite 5
+样式方案:    Tailwind CSS（仅核心工具类）+ CSS Variables + CSS Modules（复杂组件）
+动画:        Framer Motion（页面切换、状态变化、弹窗）
+图表:        D3.js（热力图、波形图底层渲染）+ Recharts（统计图表）
+状态管理:    Zustand（全局状态 + 数据流）
+串口/BLE:   Electron IPC → Node.js serialport / noble（仅接口，不强制运行）
+本地存储:   electron-store（事件日志、用户配置持久化）
+```
+
+---
+
+## PART 1 · 设计系统
+
+### 1.1 色彩系统（CSS Variables，全局注入）
+
+```css
+:root {
+  /* 背景层级 */
+  --bg-0: #080C10;      /* 最底层，窗口背景 */
+  --bg-1: #0D1117;      /* 主内容区 */
+  --bg-2: #161B22;      /* 卡片/面板 */
+  --bg-3: #1C2128;      /* 输入框/次级面板 */
+
+  /* 边框 */
+  --border-subtle: #21262D;
+  --border-default: #30363D;
+  --border-emphasis: #484F58;
+
+  /* 文字 */
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted: #484F58;
+
+  /* 状态色 */
+  --safe:    #2EA043;
+  --safe-glow: rgba(46, 160, 67, 0.4);
+  --warn:    #D29922;
+  --warn-glow: rgba(210, 153, 34, 0.4);
+  --danger:  #F85149;
+  --danger-glow: rgba(248, 81, 73, 0.4);
+  --recovery: #388BFD;
+  --recovery-glow: rgba(56, 139, 253, 0.4);
+
+  /* 信号线色 */
+  --eeg-color:  #39D0D8;   /* 青色 · EEG */
+  --nirs-color: #A371F7;   /* 紫色 · NIRS */
+  --emg-color:  #F0883E;   /* 橙色 · EMG */
+
+  /* 品牌色 */
+  --accent: #0A84FF;
+  --accent-dim: rgba(10, 132, 255, 0.15);
+
+  /* 热力图色阶（亚临床 · 绿系） */
+  --heat-0: #161B22;
+  --heat-1: #0E4429;
+  --heat-2: #006D32;
+  --heat-3: #26A641;
+  --heat-4: #39D353;
+
+  /* 热力图色阶（发作 · 红系） */
+  --heat-s1: #3D1A1A;
+  --heat-s2: #7A2020;
+  --heat-s3: #C0392B;
+  --heat-s4: #F85149;
+}
+```
+
+### 1.2 字体系统
+
+```css
+/* 引入字体（项目内嵌或 CDN） */
+/* Display: Syne — 科技感标题 */
+/* Body: DM Sans — 清晰医疗正文 */
+/* Mono: JetBrains Mono — 所有数值、时间戳、信号参数 */
+
+--font-display: 'Syne', sans-serif;
+--font-body:    'DM Sans', sans-serif;
+--font-mono:    'JetBrains Mono', monospace;
+```
+
+### 1.3 组件规范
+
+- `border-radius`: 统一 6px，弹窗 10px，圆形按钮 50%
+- `box-shadow`（卡片）: `0 1px 3px rgba(0,0,0,0.4)`
+- 所有可交互元素：`transition: all 150ms ease`
+- 按钮按下：`transform: scale(0.96)`
+- 图标库：Lucide React
+
+---
+
+## PART 2 · 数据架构（核心，必须严格实现）
+
+### 2.1 数据帧标准结构
+
+```typescript
+// src/types/signal.ts
+
+export interface SignalFrame {
+  timestamp: number            // Unix ms（硬件时间戳，非接收时间）
+  eeg: number[]               // 8通道原始 μV 值，如 [-12.4, 8.1, ...]
+  nirs: {
+    hbo: number               // 氧合血红蛋白 μmol/L
+    hbr: number               // 脱氧血红蛋白 μmol/L
+    spo2: number              // 衍生血氧饱和度 %
+  }
+  emg: number[]               // 2通道 μV
+  imu?: {
+    ax: number; ay: number; az: number    // 加速度 m/s²（伪迹辅助判断）
+  }
+  batteryLevel: number        // 0-100
+}
+
+export interface ProcessedFrame extends SignalFrame {
+  riskScore: number           // 0-100，算法输出
+  riskState: RiskState        // 'safe' | 'warning' | 'seizure' | 'recovery'
+  artifacts: ArtifactType[]   // 检测到的伪迹类型
+  features: SeizureFeatures   // 提取的特征值
+}
+
+export type RiskState = 'safe' | 'warning' | 'seizure' | 'recovery' | 'emergency'
+export type ArtifactType = 'chewing' | 'movement' | 'electrode_pop' | 'power_line'
+
+export interface SeizureFeatures {
+  spikeCount: number          // 棘波计数（滑动窗口）
+  bandpower: {
+    delta: number; theta: number
+    alpha: number; beta: number; gamma: number
+  }
+  nirsDropRate: number        // 血氧下降速率
+  emgBurst: boolean           // 肌电爆发标志
+  preIctalConfidence: number  // Pre-ictal 置信度 0-1
+}
+```
+
+### 2.2 数据源统一接口（策略模式）
+
+```typescript
+// src/data/IDataSource.ts
+
+export type ConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'error'
+  | 'mock'
+
+export interface IDataSource {
+  readonly name: string
+  readonly status: ConnectionStatus
+
+  connect(config?: Record<string, unknown>): Promise<void>
+  disconnect(): Promise<void>
+  onFrame(callback: (frame: SignalFrame) => void): () => void   // 返回取消订阅函数
+  onStatusChange(callback: (status: ConnectionStatus) => void): () => void
+  onError(callback: (error: Error) => void): () => void
+}
+```
+
+### 2.3 三种数据源实现（全部实现，Mock为默认）
+
+```typescript
+// src/data/adapters/MockAdapter.ts
+// Mock 模式：完整模拟正常→预警→发作→恢复的生命周期
+// - 正常期 EEG: 基础 alpha 波（8-12Hz）+ 高斯噪声
+// - Pre-ictal 期: 逐步增加棘波密度，NIRS 开始缓降
+// - 发作期: 高幅高频爆发，EMG 同步爆发，NIRS 快速下降
+// - 恢复期: 信号逐渐平稳，riskScore 缓降回 safe
+// 每 60-120 秒随机触发一次预警周期，可配置
+
+// src/data/adapters/WebSocketAdapter.ts
+// WebSocket 模式
+// 连接 ws://[host]:[port]/stream
+// 期望服务器推送 JSON 格式的 SignalFrame
+// 内置心跳检测（每5秒 ping），断线自动重连（指数退避）
+
+// src/data/adapters/SerialAdapter.ts
+// 串口模式（通过 Electron IPC 调用 Node.js serialport）
+// 支持配置端口、波特率、数据协议（自定义二进制帧解析）
+// 提供帧解析器接口：parseFrame(buffer: Buffer): SignalFrame
+
+// src/data/adapters/BLEAdapter.ts
+// BLE 蓝牙模式（通过 Electron IPC 调用 noble）
+// 支持扫描 → 列出设备 → 选择连接
+// 订阅特征值 UUID 读取数据
+```
+
+### 2.4 信号处理管道
+
+```typescript
+// src/data/SignalProcessor.ts
+
+class SignalProcessor {
+  // 带通滤波（EEG: 0.5-70Hz，Butterworth 4阶，IIR 实现）
+  bandpassFilter(signal: number[], lowHz: number, highHz: number, sampleRate: number): number[]
+
+  // 陷波滤波（50Hz 或 60Hz 工频干扰消除）
+  notchFilter(signal: number[], freqHz: 50 | 60, sampleRate: number): number[]
+
+  // 伪迹检测
+  // - 运动伪迹：IMU 加速度 > 阈值 或 EMG 全频段功率异常高
+  // - 电极脱落：信号方差 < 极小值
+  // - 工频干扰：50/60Hz 功率占比异常高
+  detectArtifacts(frame: SignalFrame): ArtifactType[]
+
+  // 特征提取（滑动窗口 5秒，步长 0.5秒）
+  extractFeatures(window: SignalFrame[]): SeizureFeatures
+
+  // 风险评分（加权融合多模态特征）
+  computeRiskScore(features: SeizureFeatures, history: ProcessedFrame[]): number
+}
+```
+
+### 2.5 Zustand 全局状态
+
+```typescript
+// src/store/index.ts
+
+interface AppStore {
+  // 数据源
+  dataSource: IDataSource
+  connectionStatus: ConnectionStatus
+  setDataSource: (source: IDataSource) => void
+
+  // 实时数据（环形缓冲区，保留最近 30s = 7680帧@256Hz）
+  frameBuffer: ProcessedFrame[]
+  latestFrame: ProcessedFrame | null
+  pushFrame: (frame: ProcessedFrame) => void
+
+  // 风险状态
+  riskState: RiskState
+  riskScore: number
+
+  // 事件日志（持久化）
+  events: SeizureEvent[]
+  addEvent: (event: SeizureEvent) => void
+
+  // 当前登录用户
+  currentUser: User | null
+  currentPortal: 'patient' | 'guardian' | 'doctor'
+  login: (user: User) => void
+  switchPortal: (portal: Portal) => void
+
+  // 报警队列
+  alerts: Alert[]
+  pushAlert: (alert: Alert) => void
+  dismissAlert: (id: string) => void
+
+  // 患者列表（医生端）
+  patients: Patient[]
+
+  // 设置
+  settings: AppSettings
+  updateSettings: (patch: Partial<AppSettings>) => void
+}
+```
+
+---
+
+## PART 3 · 应用入口与全局布局
+
+### 3.1 Electron 主进程
+
+```typescript
+// electron/main.ts
+
+// 创建 frameless 窗口
+const win = new BrowserWindow({
+  width: 1440,
+  height: 900,
+  minWidth: 1280,
+  minHeight: 800,
+  frame: false,           // 无系统边框
+  titleBarStyle: 'hidden',
+  transparent: false,
+  backgroundColor: '#080C10',
+  webPreferences: {
+    preload: path.join(__dirname, 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+  }
+})
+
+// IPC 处理：窗口控制（最小化/最大化/关闭）
+// IPC 处理：串口操作（列举端口、连接、断开、数据流）
+// IPC 处理：BLE 操作（扫描、连接、订阅）
+// IPC 处理：文件导出（PDF 报告）
+```
+
+### 3.2 全局布局组件
+
+```
+App
+├── LoginScreen           （未登录时全屏显示）
+└── AppShell              （登录后）
+    ├── TitleBar          （40px，frameless，可拖拽）
+    │   ├── Logo + 应用名
+    │   ├── PortalSwitcher （患者端 / 监护人端 / 医生端 切换标签）
+    │   ├── LiveIndicator  （● LIVE 脉冲指示灯）
+    │   ├── ConnectionBadge（连接状态 + 设备电量）
+    │   └── WindowControls（最小化/最大化/关闭按钮）
+    ├── Sidebar            （200px，可折叠至 64px）
+    │   ├── NavItem × n    （图标 + 文字，激活态左侧蓝色竖条）
+    │   └── CollapseButton
+    └── ContentArea        （Framer Motion AnimatePresence 包裹，页面切换动画）
+        └── <CurrentPage />
+```
+
+### 3.3 标题栏细节
+
+- `-webkit-app-region: drag` 使标题栏可拖拽，按钮区域设置 `no-drag`
+- LiveIndicator：绿色实心圆 + CSS `@keyframes pulse`（连接正常时），灰色（未连接），红色快闪（数据异常/连接错误）
+- PortalSwitcher：三个 pill 形标签，切换时 Framer Motion layoutId 动画跟随底部滑块
+
+---
+
+## PART 4 · 登录界面
+
+### 布局与交互
+
+全屏深色背景（`--bg-0`），中央垂直居中布局。
+
+**视觉设计：**
+- 背景：极细网格线纹理（CSS `background-image: linear-gradient` 网格）+ 角落放射状蓝色光晕（模拟医疗设备屏幕氛围）
+- 顶部：Logo（脑波图标 SVG）+ "灵犀妙探" + 副标题 "智能癫痫全周期监测平台"
+
+**交互流程：**
+
+```
+Step 1: 身份选择
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│   👤 患者     │ │  👨‍👩‍👧 监护人  │ │   🩺 医生    │
+│              │ │              │ │              │
+│  个人健康     │ │  家庭守护     │ │  临床管理     │
+│  管理与预警   │ │  远程监控     │ │  数据分析     │
+└──────────────┘ └──────────────┘ └──────────────┘
+  点击选中 → 卡片高亮（accent 边框 + 内发光），其余卡片淡出
+
+Step 2: 凭证输入（选中后卡片下方展开，Framer Motion 弹簧动画）
+  账号输入框 + 密码输入框 + 登录按钮
+
+Step 3: 登录动画
+  成功 → 三张卡片向上飞出 + 主界面从下方滑入（500ms）
+  失败 → 输入框水平 shake 动画 + 错误提示
+```
+
+**演示模式：** 每个身份卡片下方有灰色小字 "演示账号: demo / demo123"
+
+---
+
+## PART 5 · 患者端
+
+侧边栏导航项：实时动态 / 生活日志 / 健康课堂
+
+### 5.1 实时动态页（默认首页）
+
+三栏布局（`display: grid; grid-template-columns: 300px 1fr 260px`），无间距 gap 使用 16px，全部卡片 `bg-2` 背景。
+
+---
+
+**左栏：状态球 + SOS**
+
+**状态球实现：**
+
+```css
+/* 纯 CSS 动画球体，不依赖 Canvas */
+.status-orb {
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* safe 状态 */
+.status-orb.safe {
+  background: radial-gradient(circle at 35% 35%,
+    #4ADE80, #2EA043, #166534);
+  box-shadow:
+    0 0 40px var(--safe-glow),
+    0 0 80px rgba(46,160,67,0.2),
+    inset 0 2px 4px rgba(255,255,255,0.2);
+  animation: orb-pulse-safe 3s ease-in-out infinite;
+}
+
+/* warning 状态 */
+.status-orb.warning {
+  background: radial-gradient(circle at 35% 35%,
+    #FCD34D, #D29922, #92400E);
+  box-shadow: 0 0 40px var(--warn-glow), ...;
+  animation: orb-pulse-warn 1.5s ease-in-out infinite;
+}
+
+/* seizure 状态 */
+.status-orb.seizure {
+  animation: orb-flash-danger 0.5s ease-in-out infinite;
+}
+
+@keyframes orb-pulse-safe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--safe-glow); }
+  50%       { transform: scale(1.05); box-shadow: 0 0 60px var(--safe-glow); }
+}
+```
+
+球体内部显示：风险评分数值（JetBrains Mono，大字）、状态文字。
+
+球体下方：
+- 状态描述文字（`状态安全 ✓` / `检测到异常 ⚠` / `发作期 ✕`）
+- 持续监测时长计时器（`持续监测中 · 02:14:37`）
+- 当前 Pre-ictal 置信度条（0-100%，细长进度条，颜色跟随状态）
+
+**SOS 按钮：**
+
+```tsx
+// 长按 3 秒触发，圆形 SVG 进度条围绕按钮边缘
+// 松手取消，进度归零
+// 触发后：全局 emergencyOverlay 显示
+<SOSButton
+  onTrigger={() => store.pushAlert({ type: 'sos', ... })}
+  holdDuration={3000}
+/>
+```
+
+---
+
+**中栏：三路实时波形**
+
+使用 D3.js 渲染，每条波形图均为独立 `<canvas>` 元素，高度 130px，宽度自适应。
+
+**波形渲染逻辑：**
+```typescript
+// 使用 requestAnimationFrame 驱动
+// frameBuffer 中取最近 30s 数据（7680 帧）
+// D3 scaleLinear 映射到 canvas 像素
+// 每帧差量更新（平移既有像素 + 绘制新数据段），避免全量重绘
+// 渲染频率：60fps（requestAnimationFrame）
+// 数据采样显示：256Hz → 降采样至 512px 宽显示（避免过密）
+
+// EEG 图额外处理：
+// - 棘波区域：自动检测并绘制半透明红色矩形覆盖
+// - 伪迹区域：绘制黄色虚线矩形 + 伪迹类型标签
+```
+
+三图顶部各有：
+- 左：信号名称 + 当前值徽章（monospace，实时更新）
+- 右：单位标签（μV / % / μV）
+- 图内右下角：滚动速度控制（`25mm/s` / `50mm/s`，点击切换）
+
+三图底部：`融合监测中` 状态条，青色脉冲圆点 + 置信度 + 算法版本号
+
+**运动干扰横幅（条件显示）：**
+```tsx
+// 当 artifacts 包含 'movement' 时显示
+<ArtifactBanner
+  visible={hasMovementArtifact}
+  message="监测到较强肢体活动干扰 · 预警精度暂时受限 · 建议保持平稳"
+/>
+// 黄色背景，顶部滑入，自动消失（伪迹消除后 3s 消失）
+```
+
+---
+
+**右栏：今日摘要**
+
+4 张信息卡片垂直排列：
+1. 今日发作次数（大数字 + 环比昨日箭头）
+2. 上次事件（时间 + 持续时长）
+3. 服药依从性环形图（Recharts Radial，完成/总计，百分比居中显示）
+4. 下次服药倒计时（HH:MM:SS 实时倒数，临近时变为橙色）
+
+---
+
+**预警弹窗（RiskState → warning/seizure 时自动触发）：**
+
+```tsx
+// Framer Motion AnimatePresence
+// 全屏半透明遮罩（backdrop-blur）
+// 中央弹出卡片，amber/red 主题
+// 内容：
+//   - 警告图标（SVG，动画）
+//   - "监测到异常脑电特征"
+//   - Pre-ictal 置信度 XX%
+//   - "预计 X 分钟后可能发作，请寻找安全位置"
+//   - 两按钮：[确实发作了] [这是误报]
+// 两按钮的反馈写入事件日志 + 算法反馈队列
+```
+
+---
+
+### 5.2 生活日志页
+
+左侧：时间轴（纵向），右侧：快速记录表单
+
+**时间轴条目类型：**
+- 🔴 系统检测事件（红色圆点）：EEG异常 · 03:42 · 持续2m14s
+- 🟢 手动打卡（绿色圆点）：服药记录 · 08:00
+- ⚪ 普通日志（灰色圆点）：睡眠7.5h
+
+**快速记录表单（右侧固定）：**
+
+```
+服药记录     [早 ✓] [中 ✓] [晚 ○]   → toggle 按钮组
+
+睡眠时长     ────●──────────  7.5h   → 滑块
+
+情绪压力     😌  🙂  😐  😟  😰      → emoji 点击选择
+             1   2   3   4   5
+
+诱发因素     [闪光] [饮酒] [睡眠不足] [强压力] [发热] [其他]
+             → 多选 chip，选中态 accent 填充背景
+
+备注         ________________________ → 单行文本输入
+
+             [保存记录]
+```
+
+### 5.3 健康课堂页
+
+3列卡片网格，每张卡片：
+- 顶部彩色渐变条（区分文章类别）
+- 标题 + 2行摘要 + 阅读时间
+- 点击 → 右侧抽屉面板滑入，显示完整文章内容（应用内，不开浏览器）
+
+预置 4 篇真实感医疗科普文章（癫痫触发因素、正确急救流程、用药依从性、睡眠管理）
+
+---
+
+## PART 6 · 监护人端
+
+侧边栏：远程监控 / 报警设置 / 历史轨迹
+
+### 6.1 远程监控页
+
+**患者状态大卡（顶部，full-width，高度 200px）：**
+
+横向排布：
+- 左：患者头像（字母 Avatar） + 姓名 + 年龄
+- 中：当前风险状态徽章（颜色随状态变化） + 当前风险分 + 头环连接状态
+- 右：电量图标（动画充电/放电） + 信号强度（4格 BLE 图标） + GPS 位置文字描述
+
+**地图占位区（中部，高度 300px）：**
+
+SVG 绘制的深色简化地图（中国轮廓或抽象城市路网），闪烁 Pin 标记患者位置，
+坐标数据从 Mock 或 GPS 接口读取。
+标注：`最后更新 00:23 前`
+
+**历史报警列表（底部）：**
+
+表格行：`[色彩徽章] [时间] [事件描述] [持续时长] [已处理/未处理]`
+
+### 6.2 报警系统
+
+**低级报警（Warning · 黄色）：**
+```tsx
+// Framer Motion，从右上角滑入的 Toast
+// 背景 amber，图标+标题+简述
+// 4秒自动消失 OR 点击查看详情
+// 最多同时显示 3 条，超出入队列
+```
+
+**高级报警（Seizure · 红色）：**
+```tsx
+// 强制全屏覆盖，z-index 最高
+// 背景：#0D0000（极深红），边框动画：vignette pulse
+// 内容分区：
+//   顶部：[!] 高危报警 — 患者姓名
+//   中部：事件时间 · 类型 · 持续时长
+//         当前位置（GPS文字）
+//         当前风险分（大数字，红色）
+//   底部：两个按钮
+//     [🗺 一键导航]   → 调用系统地图（Electron shell.openExternal）
+//     [✓ 已确认处理]  → 关闭覆盖，事件标记已处理
+// 不可被任何操作绕过（无背景点击关闭）
+```
+
+**测试按钮（开发/演示用）：**
+```
+页面右下角：[触发黄色报警测试] [触发红色报警测试]
+小字灰色，不影响医疗界面整体感
+```
+
+### 6.3 历史轨迹页
+
+可排序数据表（日期/时间/地点/严重程度/持续时长/关联因素）
+
+点击行 → 行内展开，显示：
+- 该事件的三路波形缩略图（静态截图风格，非实时）
+- 关联的日志记录（漏服药 / 睡眠不足等）
+
+---
+
+## PART 7 · 医生端
+
+侧边栏：患者管理 / 病情热力图 / 波形回溯 / 报告生成
+
+### 7.1 患者管理大屏
+
+全宽数据表，带排序/筛选：
+
+| 患者姓名 | 年龄 | 本周发作 | 最近发作 | 风险等级 | 服药依从性 | 操作 |
+|--------|-----|---------|---------|---------|----------|------|
+| 李明   | 34  | 7次     | 2h前    | 🔴高危   | 62%      | [查看] |
+| 王芳   | 28  | 2次     | 1d前    | 🟡中危   | 91%      | [查看] |
+| ...    | ... | ...     | ...     | ...      | ...      | ...  |
+
+- 风险等级列：色彩徽章，表头可点击排序（默认高危置顶）
+- 服药依从性：mini 进度条
+- 操作列：查看按钮 → 跳转至该患者的热力图页（侧边栏导航项高亮切换，患者上下文注入）
+- 顶部搜索框 + 风险等级筛选 chip 组
+
+预置 8 名模拟患者数据，各有不同的发作模式特征。
+
+### 7.2 病情热力图（核心页，重点实现）
+
+**使用 D3.js 完整实现**
+
+```typescript
+// 数据结构
+interface HeatmapCell {
+  date: string          // 'YYYY-MM-DD'
+  hour: number          // 0-23
+  intensity: number     // 0-4（亚临床放电级别）
+  seizureLevel: number  // 0-4（实际发作级别）
+  events: HeatEvent[]   // 该格的具体事件
+  missedMed: boolean
+  sleepDeprived: boolean
+}
+```
+
+**D3 渲染规格：**
+```
+画布尺寸：父容器宽度自适应，行高 28px，列宽 (宽度-日期标签) / 24
+
+横轴：0:00 ~ 23:00，每格代表1小时
+纵轴：最近 28 天，每行一天，格式 "MM/DD 周X"
+
+每格颜色：
+  - 无事件：--heat-0
+  - 亚临床放电（intensity 1-4）：--heat-1 至 --heat-4
+  - 实际发作（seizureLevel > 0）：--heat-s1 至 --heat-s4
+  - 同时有亚临床和发作：发作色优先
+
+覆盖图标层（SVG foreignObject 或 HTML overlay）：
+  - 💊 漏服药（该天有漏服且格子有事件）→ 右上角微型图标
+  - 😴 睡眠不足（< 6h 且格子有事件）→ 左上角微型图标
+
+交互：
+  - hover → 显示自定义 tooltip（Framer Motion，绝对定位）
+    tooltip 内容：时间段 / 事件类型 / 持续时长 / 峰值强度 / 关联因素
+  - click → 右侧抽屉打开，直接跳转波形回溯页到对应时刻
+```
+
+**底部模式分析条（算法输出）：**
+```
+┌─────────────────────────────────────────────────────┐
+│ ⚠  系统检测到以下模式                                 │
+│                                                     │
+│ 🌙 睡眠型癫痫倾向  — 凌晨 02:00–05:00 发作概率高 63%  │
+│    建议：将傍晚用药时间调整为 21:00，并加强监测        │
+│                                                     │
+│ 📋 服药相关性  — 漏服后 18–24h 内发作概率提升 2.3倍   │
+│    建议：启用每日用药提醒                             │
+└─────────────────────────────────────────────────────┘
+```
+
+### 7.3 多模态波形回溯页
+
+**顶部时间轴导航条：**
+```
+[← 前一天]  [2025-01-15 ▼]  [→ 后一天]
+
+全天时间轴（宽度100%，SVG绘制）：
+████░░░░████░░░░░░░░████░░░░  ← 高亮段表示有事件
+  ↑
+拖动手柄（当前查看位置）
+当前：03:42:15
+```
+
+**三路波形主视图（D3.js Canvas 渲染，严格联动）：**
+
+```typescript
+// 三图共享单一 timeWindow 状态：{ start: number, end: number }（Unix ms）
+// 任意图拖动/缩放 → 更新 timeWindow → 三图同步重渲
+// 缩放级别：
+//   Level 0（全局）：6小时视图
+//   Level 1：30分钟视图
+//   Level 2：5分钟视图
+//   Level 3（最细）：30秒视图
+// 鼠标滚轮：以鼠标位置为中心缩放
+// 鼠标拖拽：平移时间轴
+
+// 注解层（SVG overlay，绝对定位覆盖在 canvas 上）：
+// 红色半透明矩形：算法标注发作区域
+//   → 矩形顶部 label：'棘慢波发放 · 置信度 94%'
+// 黄色虚线矩形：伪迹区域
+//   → label：'[咀嚼伪迹]' / '[翻身干扰]' / '[电极脱落]'
+// 发作标注矩形颜色比伪迹深，二者视觉差异明显
+
+// 右键菜单（Context Menu，hover 在注解区域右键触发）：
+interface AnnotationContextMenu {
+  options: [
+    '标记为伪迹（排除此段）',
+    '确认为有效发作',
+    '修改置信度',
+    '添加文字备注',
+    '导出此段波形'
+  ]
+}
+```
+
+每路波形图左侧有：通道选择器（EEG 可选显示哪几路通道，多选 checkbox）
+
+右侧面板（可折叠，宽240px）：当前选中时间段的特征参数显示：
+- 各频段功率（delta/theta/alpha/beta/gamma 横向条形图）
+- NIRS 变化率
+- EMG RMS 值
+- 算法置信度历史曲线（Recharts）
+
+### 7.4 报告生成器页
+
+左右双栏（40% / 60%）
+
+**左栏：配置区**
+```
+患者选择     [李明 ▼]
+报告周期     [周报 ●] [月报 ○]
+日期范围     [2025-01-09] → [2025-01-15]
+
+包含章节     ☑ 发作次数统计
+             ☑ 发作时间分布（热力图截图）
+             ☑ 多模态特征摘要
+             ☑ 服药依从性评估
+             ☑ 医生备注
+             ☐ 完整波形附录
+
+医生备注     ┌────────────────────┐
+             │                    │
+             └────────────────────┘
+
+[预览报告]                [导出 PDF]
+```
+
+**右栏：实时预览区**
+深色文档样式预览（模拟 PDF 排版），内容随左侧配置实时响应：
+- 报告标题、患者信息、摘要统计卡片、热力图缩略图
+- 配置项取消时，对应章节淡出（opacity 过渡）
+
+**导出逻辑：**
+```tsx
+// 点击导出 PDF
+// 1. 显示全屏进度覆盖：[动画进度条] "正在生成报告... XX%"
+//    进度分段：数据收集(20%) → 图表渲染(40%) → PDF组装(80%) → 完成(100%)
+// 2. 实际实现：使用 Electron IPC 调用主进程，
+//    主进程使用 puppeteer 或 html2pdf 渲染报告页面
+// 3. 完成：成功 Toast + "在 Finder/资源管理器中显示" 按钮
+```
+
+---
+
+## PART 8 · Settings 页面（全局，所有端口可进入）
+
+分区卡片式布局：
+
+**数据源配置**
+```
+○ Mock 模式（演示）         [● 当前]
+○ WebSocket   [ws://___________:8080]    [测试连接]
+○ BLE 蓝牙    [扫描设备...]
+○ 串口        [COM3 ▼]  [115200 ▼]      [连接]
+```
+
+连接测试：点击按钮 → 按钮变为旋转加载图标 → 成功（绿色✓）/ 失败（红色✕ + 错误信息）
+
+**信号处理参数**
+```
+EEG 带通滤波     [  0.5  ] Hz  ~  [  70  ] Hz
+陷波滤波         [● 50Hz]  [○ 60Hz]
+EMG 伪迹阈值     [  150  ] μV
+预警灵敏度       低 ─────●──── 高    （滑块，影响 preIctalConfidence 阈值）
+```
+
+**通知配置**
+```
+监护人手机号     [+86 ___________]
+报警音效         [● 开]  [○ 关]
+预警提前量       [  10  ] 分钟
+```
+
+**系统信息**
+```
+应用版本    v1.0.0
+算法版本    EpiNet-v2.3.1
+数据格式    SignalFrame v1
+[检查更新]  [清除本地缓存]  [导出诊断日志]
+```
+
+---
+
+## PART 9 · 全局组件
+
+### 9.1 通知系统
+
+```tsx
+// 右上角 Toast 队列
+// Framer Motion：从右侧滑入，离开向右滑出
+// 最多同时显示 3 条
+// 类型：info（蓝）/ warning（琥珀）/ error（红）/ success（绿）
+// 点击可手动关闭，自动消失计时器（进度条显示倒计时）
+```
+
+### 9.2 紧急覆盖层（EmergencyOverlay）
+
+```tsx
+// z-index: 9999，覆盖一切
+// 触发条件：SOS 长按 OR riskState === 'seizure' 且监护人端
+// 带 CSS vignette-pulse 动画（边缘向内红色光晕扩散）
+// 状态：发送中 → 已送达 → 等待确认
+```
+
+### 9.3 Mock 数据标识条
+
+```tsx
+// 当 dataSource 为 Mock 模式时，顶部常驻橙色细条
+// "⚠ 演示模式 · 当前显示模拟数据，非真实设备信号"
+// 不影响功能演示，但向用户明确说明当前数据状态
+```
+
+---
+
+## PART 10 · 动画与微交互规范（必须全部实现）
+
+```
+页面切换:       Framer Motion · slide + fade，方向感知（前进向左，后退向右）
+状态球颜色变化: CSS transition 800ms ease，颜色/阴影渐变
+状态球脉冲:     CSS @keyframes，safe=3s / warning=1.5s / seizure=0.5s
+风险分数变化:   Framer Motion animate number，弹簧物理
+报警弹窗出现:   scale(0.8)+opacity(0) → scale(1)+opacity(1)，spring
+报警弹窗消失:   scale(1) → scale(0.95)+opacity(0)，100ms
+全屏紧急覆盖:   从 opacity(0) 全屏铺开，200ms
+Toast 出现:    translateX(100%) → translateX(0)，spring
+Toast 消失:    translateX(0) → translateX(120%)，200ms ease-in
+侧边栏折叠:    width 200px → 64px，200ms ease，图标位置不变
+按钮按下:      scale(0.96)，150ms
+卡片悬停:      border-color 变为 --border-emphasis，200ms
+数据刷新:      数值更新时 opacity 0.6 → 1，100ms flash
+连接成功:      LiveIndicator 从灰色 flash 变为绿色 pulse
+```
+
+---
+
+## PART 11 · 项目文件结构
+
+```
+lingxi-miaodao/
+├── electron/
+│   ├── main.ts              # 主进程（窗口 + IPC）
+│   └── preload.ts           # 上下文桥接
+├── src/
+│   ├── types/
+│   │   ├── signal.ts        # 数据帧类型定义
+│   │   ├── events.ts        # 事件日志类型
+│   │   └── user.ts          # 用户/患者类型
+│   ├── data/
+│   │   ├── IDataSource.ts   # 数据源接口
+│   │   ├── SignalProcessor.ts
+│   │   └── adapters/
+│   │       ├── MockAdapter.ts
+│   │       ├── WebSocketAdapter.ts
+│   │       ├── SerialAdapter.ts
+│   │       └── BLEAdapter.ts
+│   ├── store/
+│   │   └── index.ts         # Zustand store
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── TitleBar.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── PortalSwitcher.tsx
+│   │   │   └── AppShell.tsx
+│   │   ├── charts/
+│   │   │   ├── WaveformChart.tsx    # D3 实时波形
+│   │   │   ├── SeizureHeatmap.tsx   # D3 热力图
+│   │   │   └── StatsCharts.tsx      # Recharts 统计图
+│   │   ├── StatusOrb.tsx
+│   │   ├── SOSButton.tsx
+│   │   ├── EmergencyOverlay.tsx
+│   │   ├── AlertToast.tsx
+│   │   ├── ArtifactBanner.tsx
+│   │   └── MockModeBanner.tsx
+│   ├── portals/
+│   │   ├── patient/
+│   │   │   ├── LiveDashboard.tsx
+│   │   │   ├── LifeLog.tsx
+│   │   │   └── HealthClass.tsx
+│   │   ├── guardian/
+│   │   │   ├── RemoteMonitor.tsx
+│   │   │   ├── AlertSystem.tsx
+│   │   │   └── HistoryTrack.tsx
+│   │   └── doctor/
+│   │       ├── PatientManagement.tsx
+│   │       ├── SeizureHeatmapPage.tsx
+│   │       ├── WaveformReview.tsx
+│   │       └── ReportGenerator.tsx
+│   ├── pages/
+│   │   ├── LoginScreen.tsx
+│   │   └── SettingsPage.tsx
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css            # CSS Variables + 全局样式
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+└── tsconfig.json
+```
+
+---
+
+## PART 12 · 交付要求
+
+1. **完整可运行代码**，`npm install && npm run dev` 后直接启动 Electron 窗口
+2. **Mock 模式开箱即用**，无需任何硬件即可完整演示所有功能
+3. **D3 波形图和热力图必须真正实现**，不可用静态图片替代
+4. **实时数据引擎必须工作**，波形图看得到实时滚动的曲线
+5. **三端切换完整**，每个端口的所有页面均可正常导航
+6. **数据源接口完整实现**，WebSocket / Serial / BLE adapter 骨架代码完整，即使无硬件也能清晰展示接入点
+7. **TypeScript 严格类型**，零 `any`，零 `@ts-ignore`
+8. **代码注释充分**，复杂算法逻辑（滤波、特征提取）必须注释说明
+9. **不使用任何 UI 组件库（MUI / Ant Design / Chakra）**，全部从零用 Tailwind + CSS 实现，确保设计可控
+10. **视觉效果达到医疗 SaaS 产品标准**——这是展示给投资人的演示系统
+
+---
+
+> 开始编码。先输出完整 `package.json`，然后按文件结构逐文件输出，每个文件完整，不省略。
