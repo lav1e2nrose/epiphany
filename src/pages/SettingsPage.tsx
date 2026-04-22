@@ -135,6 +135,30 @@ export function SettingsPage(): JSX.Element {
         </div>
       </section>
 
+      <section className="rounded-md border border-border-default bg-bg-2 p-4">
+        <h2 className="font-semibold">通知配置</h2>
+        <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+          <label>监护人手机号
+            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.caregiverPhone} onChange={(event) => updateSettings({ caregiverPhone: event.target.value })} />
+          </label>
+          <label>报警音效
+            <div className="mt-2 flex gap-3">
+              <label className="flex items-center gap-1">
+                <input type="radio" checked={settings.alertSound} onChange={() => updateSettings({ alertSound: true })} />
+                开
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" checked={!settings.alertSound} onChange={() => updateSettings({ alertSound: false })} />
+                关
+              </label>
+            </div>
+          </label>
+          <label>预警提前量（分钟）
+            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.warningLeadMinutes} onChange={(event) => updateSettings({ warningLeadMinutes: Number(event.target.value) })} />
+          </label>
+        </div>
+      </section>
+
       <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm text-text-secondary">
         应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1
       </section>
