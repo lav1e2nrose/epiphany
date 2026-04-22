@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArtifactBanner } from '../../components/ArtifactBanner'
 import { EmergencyOverlay } from '../../components/EmergencyOverlay'
 import { SOSButton } from '../../components/SOSButton'
 import { StatusOrb } from '../../components/StatusOrb'
 import { WaveformChart } from '../../components/charts/WaveformChart'
-import { MockAdapter } from '../../data/adapters/MockAdapter'
 import { SignalProcessor } from '../../data/SignalProcessor'
 import { useAppStore } from '../../store'
 import type { ProcessedFrame, RiskState, SignalFrame } from '../../types/signal'
@@ -19,6 +18,9 @@ function toRiskState(score: number): RiskState {
 }
 
 export function LiveDashboard(): JSX.Element {
+  const dataSource = useAppStore((state) => state.dataSource)
+  const settings = useAppStore((state) => state.settings)
+  const setConnectionStatus = useAppStore((state) => state.setConnectionStatus)
   const pushFrame = useAppStore((state) => state.pushFrame)
   const frameBuffer = useAppStore((state) => state.frameBuffer)
   const riskState = useAppStore((state) => state.riskState)
@@ -26,20 +28,31 @@ export function LiveDashboard(): JSX.Element {
   const pushAlert = useAppStore((state) => state.pushAlert)
   const addEvent = useAppStore((state) => state.addEvent)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
+  const historyRef = useRef<ProcessedFrame[]>([])
 
   useEffect(() => {
-    const source = new MockAdapter()
-    const cache: SignalFrame[] = []
+    historyRef.current = frameBuffer
+  }, [frameBuffer])
 
-    void source.connect()
-    const unsubscribe = source.onFrame((frame) => {
+  useEffect(() => {
+    const cache: SignalFrame[] = []
+    const unsubscribeFrame = dataSource.onFrame((frame) => {
       cache.push(frame)
       const windowed = cache.slice(-320)
-      const features = processor.extractFeatures(windowed)
-      const artifacts = processor.detectArtifacts(frame)
-      const score = processor.computeRiskScore(features, frameBuffer)
-      const processed: ProcessedFrame = {
+      const filteredEeg = processor.notchFilter(
+        processor.bandpassFilter(frame.eeg, settings.bandpassLow, settings.bandpassHigh, 256),
+        settings.notchHz,
+        256,
+      )
+      const filteredFrame: SignalFrame = {
         ...frame,
+        eeg: filteredEeg,
+      }
+      const features = processor.extractFeatures(windowed)
+      const artifacts = processor.detectArtifacts(filteredFrame)
+      const score = processor.computeRiskScore(features, historyRef.current)
+      const processed: ProcessedFrame = {
+        ...filteredFrame,
         features,
         artifacts,
         riskScore: score,
@@ -47,12 +60,27 @@ export function LiveDashboard(): JSX.Element {
       }
       pushFrame(processed)
     })
+    const unsubscribeStatus = dataSource.onStatusChange(setConnectionStatus)
+    const unsubscribeError = dataSource.onError(() => setConnectionStatus('error'))
+
+    const config: Record<string, unknown> = {}
+    if (settings.dataSourceMode === 'websocket') config.url = settings.websocketUrl
+    if (settings.dataSourceMode === 'serial') {
+      config.port = settings.serialPort
+      config.baudRate = settings.baudRate
+    }
+    if (settings.dataSourceMode === 'ble' && settings.bleDeviceId) config.deviceId = settings.bleDeviceId
+
+    setConnectionStatus('connecting')
+    void dataSource.connect(config).catch(() => setConnectionStatus('error'))
 
     return () => {
-      unsubscribe()
-      void source.disconnect()
+      unsubscribeFrame()
+      unsubscribeStatus()
+      unsubscribeError()
+      void dataSource.disconnect()
     }
-  }, [frameBuffer, pushFrame])
+  }, [dataSource, pushFrame, setConnectionStatus, settings])
 
   useEffect(() => {
     if (riskState === 'warning' || riskState === 'seizure') {
