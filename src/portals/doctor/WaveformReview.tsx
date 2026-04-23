@@ -33,6 +33,7 @@ export function WaveformReview(): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; timestamp: number; annotationId?: string } | null>(null)
   const [selectedEegChannels, setSelectedEegChannels] = useState<number[]>([0, 1])
   const dragState = useRef<{ x: number; start: number; end: number } | null>(null)
+
   const [dragging, setDragging] = useState(false)
   const timelineRef = useRef<HTMLDivElement | null>(null)
   const windowDurationMs = WINDOW_LEVELS[zoomLevel]?.seconds * 1000
@@ -368,15 +369,21 @@ export function WaveformReview(): JSX.Element {
           <WaveformChart title="NIRS 回溯" unit="%" frames={windowFrames} selector={(f) => f.nirs.spo2} color="#A371F7" annotateSeizure />
           <WaveformChart title="EMG 回溯" unit="μV" frames={windowFrames} selector={(f) => f.emg[0] ?? 0} color="#F0883E" annotateArtifacts />
           <div className="pointer-events-none absolute inset-0">
-            {visibleAnnotations.slice(0, 16).map((item, index) => {
+            {visibleAnnotations.slice(0, 16).map((item) => {
               const ratioStart = Math.max(0, Math.min(1, (item.startTs - windowStartTs) / Math.max(1, syncedWindowEndTs - windowStartTs)))
               const ratioEnd = Math.max(0, Math.min(1, (item.endTs - windowStartTs) / Math.max(1, syncedWindowEndTs - windowStartTs)))
-              const top = 32 + (index % 6) * 24
+              const widthPct = Math.max(0.5, (ratioEnd - ratioStart) * 100)
               return (
-                <button
+                <div
                   key={item.id}
-                  className={`pointer-events-auto absolute rounded px-1 py-0.5 text-[10px] ${item.type === 'seizure' ? 'bg-danger/30 text-danger' : item.type === 'artifact' ? 'border border-warn/80 bg-warn/10 text-warn' : 'bg-accent/20 text-accent'}`}
-                  style={{ left: `${ratioStart * 100}%`, top, width: `${Math.max(4, (ratioEnd - ratioStart) * 100)}%` }}
+                  className={`pointer-events-auto absolute top-0 bottom-0 ${
+                    item.type === 'seizure'
+                      ? 'border-x border-danger/50 bg-danger/10'
+                      : item.type === 'artifact'
+                        ? 'border-x border-dashed border-warn/50 bg-warn/10'
+                        : 'border-x border-accent/40 bg-accent/10'
+                  }`}
+                  style={{ left: `${ratioStart * 100}%`, width: `${widthPct}%` }}
                   onContextMenu={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
@@ -387,8 +394,18 @@ export function WaveformReview(): JSX.Element {
                     applyWindowByEnd(item.endTs + windowDurationMs / 2)
                   }}
                 >
-                  {item.type === 'seizure' ? '棘慢波发放' : item.type === 'artifact' ? '伪迹段' : '备注'}
-                </button>
+                  <span
+                    className={`absolute left-0 top-1 max-w-[120px] truncate rounded-sm px-1 py-0.5 text-[9px] leading-none ${
+                      item.type === 'seizure'
+                        ? 'bg-danger/80 text-white'
+                        : item.type === 'artifact'
+                          ? 'bg-warn/80 text-black'
+                          : 'bg-accent/80 text-white'
+                    }`}
+                  >
+                    {renderAnnotationLabel(item)}
+                  </span>
+                </div>
               )
             })}
           </div>
@@ -416,9 +433,30 @@ export function WaveformReview(): JSX.Element {
           <div>特征参数</div>
           <div className="mt-3 space-y-3 text-xs">
             <div className="rounded border border-border-default bg-bg-3 p-2">
-              <div>同步窗口: {windowFrames.length} 帧</div>
-              <div>NIRS 变化率: {(featureSnapshot?.nirsDropRate ?? 0).toFixed(2)}</div>
-              <div>EMG RMS: {emgRms.toFixed(2)}</div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">同步窗口</span>
+                  <span className="font-mono text-text-primary">{windowFrames.length} 帧</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">NIRS 变化率</span>
+                  <span className={`font-mono ${(featureSnapshot?.nirsDropRate ?? 0) > 0.3 ? 'text-danger' : (featureSnapshot?.nirsDropRate ?? 0) > 0.1 ? 'text-warn' : 'text-safe'}`}>
+                    {(featureSnapshot?.nirsDropRate ?? 0).toFixed(3)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">EMG RMS</span>
+                  <span className={`font-mono ${emgRms > 150 ? 'text-danger' : emgRms > 80 ? 'text-warn' : 'text-safe'}`}>
+                    {emgRms.toFixed(1)} μV
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">Pre-ictal 置信度</span>
+                  <span className={`font-mono ${(featureSnapshot?.preIctalConfidence ?? 0) > 0.7 ? 'text-danger' : (featureSnapshot?.preIctalConfidence ?? 0) > 0.4 ? 'text-warn' : 'text-safe'}`}>
+                    {Math.round((featureSnapshot?.preIctalConfidence ?? 0) * 100)}%
+                  </span>
+                </div>
+              </div>
             </div>
             <div className="h-28 rounded border border-border-default bg-bg-3 p-1">
               <ResponsiveContainer width="100%" height="100%">
