@@ -155,6 +155,11 @@ ipcMain.handle('report:exportPdf', async (event, payload) => {
     await sleep(EXPORT_STAGE_DELAY_MS)
   }
   const sections = Array.isArray(payload?.modules) ? payload.modules.join(' / ') : '无'
+  const reportCycle = payload?.reportCycle === 'month' ? '月报' : '周报'
+  const dateRange =
+    typeof payload?.startDate === 'string' && typeof payload?.endDate === 'string'
+      ? `${payload.startDate} ~ ${payload.endDate}`
+      : `最近 ${payload?.rangeDays ?? 7} 天`
   const html = `
     <!doctype html>
     <html lang="zh-CN">
@@ -170,7 +175,7 @@ ipcMain.handle('report:exportPdf', async (event, payload) => {
       </head>
       <body>
         <h1>灵犀妙探 · 医疗报告</h1>
-        <div class="meta">导出时间：${new Date().toLocaleString()} ｜ 患者：${payload?.patientId ?? 'all'} ｜ 统计范围：${payload?.rangeDays ?? 7} 天</div>
+        <div class="meta">导出时间：${new Date().toLocaleString()} ｜ 患者：${payload?.patientId ?? 'all'} ｜ 周期：${reportCycle} ｜ 统计范围：${dateRange}</div>
         <div class="card"><strong>导出章节</strong><div>${sections}</div></div>
         <div class="card"><strong>医生备注</strong><div>${typeof payload?.note === 'string' ? payload.note : '无'}</div></div>
       </body>

@@ -40,6 +40,9 @@ type EpiphanyBridge = {
     patientId?: string
     rangeDays?: number
     includeSignature?: boolean
+    reportCycle?: 'week' | 'month'
+    startDate?: string
+    endDate?: string
   }) => Promise<{ ok: boolean; fileName: string; filePath: string }>
   showItemInFolder: (filePath: string) => Promise<boolean>
   checkForUpdates: () => Promise<{ ok: boolean; message: string }>
