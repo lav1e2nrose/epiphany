@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ActivitySquare, BookOpen, ClipboardList, FileText, HeartPulse, History, LayoutGrid, MapPinned, Settings, Siren, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { Portal } from '../../types/user'
 import { Sidebar, type NavItem } from './Sidebar'
@@ -45,8 +45,23 @@ function portalNav(portal: Portal): NavItem[] {
 
 export function AppShell(): JSX.Element {
   const currentPortal = useAppStore((state) => state.currentPortal)
+  const requestedPage = useAppStore((state) => state.requestedPage)
+  const consumeRequestedPage = useAppStore((state) => state.consumeRequestedPage)
   const [activePage, setActivePage] = useState('live')
   const nav = useMemo(() => portalNav(currentPortal), [currentPortal])
+
+  useEffect(() => {
+    const fallback = nav[0]?.key
+    if (fallback) setActivePage(fallback)
+  }, [nav])
+
+  useEffect(() => {
+    if (!requestedPage) return
+    if (nav.some((item) => item.key === requestedPage)) {
+      setActivePage(requestedPage)
+    }
+    consumeRequestedPage()
+  }, [consumeRequestedPage, nav, requestedPage])
 
   const page = useMemo(() => {
     const key = activePage || nav[0]?.key
