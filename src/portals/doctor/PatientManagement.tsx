@@ -3,6 +3,8 @@ import { useAppStore } from '../../store'
 
 export function PatientManagement(): JSX.Element {
   const patients = useAppStore((state) => state.patients)
+  const requestPage = useAppStore((state) => state.requestPage)
+  const setReviewFocusTimestamp = useAppStore((state) => state.setReviewFocusTimestamp)
   const [riskFilter, setRiskFilter] = useState<'all' | 'safe' | 'warning' | 'seizure'>('all')
 
   const filtered = useMemo(
@@ -34,7 +36,14 @@ export function PatientManagement(): JSX.Element {
         </thead>
         <tbody>
           {filtered.map((patient) => (
-            <tr key={patient.id} className="border-t border-border-subtle">
+            <tr
+              key={patient.id}
+              className="border-t border-border-subtle cursor-pointer hover:bg-bg-3/30"
+              onClick={() => {
+                setReviewFocusTimestamp(Date.now())
+                requestPage('review')
+              }}
+            >
               <td>{patient.name}</td>
               <td>{patient.age}</td>
               <td>{patient.weeklySeizures}次</td>

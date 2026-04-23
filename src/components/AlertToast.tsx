@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../store'
+import { MOTION_TOAST_VARIANTS, MOTION_TRANSITION_FAST } from '../constants/motion'
 
 const TOAST_LIFETIME = 4000
 
@@ -44,9 +45,11 @@ export function AlertToast(): JSX.Element {
         {visibleAlerts.map((alert) => (
           <motion.div
             key={alert.id}
-            initial={{ x: 120, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 140, opacity: 0 }}
+            variants={MOTION_TOAST_VARIANTS}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={MOTION_TRANSITION_FAST}
             className={`w-80 rounded-md border bg-bg-2 p-3 ${toneClass(alert.type)}`}
           >
             <div className="flex items-start justify-between">

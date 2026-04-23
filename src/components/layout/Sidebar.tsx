@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import clsx from 'clsx'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
+import { MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 export interface NavItem {
   key: string
@@ -21,7 +22,7 @@ export function Sidebar({ items, activeKey, onSelect }: Props): JSX.Element {
   return (
     <motion.aside
       animate={{ width: collapsed ? 64 : 200 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
+      transition={MOTION_TRANSITION_FAST}
       className="flex h-full flex-col border-r border-border-subtle bg-bg-1 py-4"
     >
       <div className="flex-1 space-y-1 px-2">

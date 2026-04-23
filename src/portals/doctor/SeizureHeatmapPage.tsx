@@ -46,7 +46,8 @@ export function SeizureHeatmapPage(): JSX.Element {
       <SeizureHeatmap
         cells={cells}
         onCellClick={(cell) => {
-          const focusTs = new Date(`${cell.date}T${cell.hour.toString().padStart(2, '0')}:00:00`).getTime()
+          const [year, month, day] = cell.date.split('-').map((value) => Number(value))
+          const focusTs = new Date(year, month - 1, day, cell.hour, 0, 0).getTime()
           setReviewFocusTimestamp(focusTs)
           requestPage('review')
         }}

@@ -85,7 +85,9 @@ export function SeizureHeatmap({ cells, onCellClick }: Props): JSX.Element {
           <div className="text-text-secondary">异常强度: {hovered.intensity}</div>
           <div className="text-text-secondary">事件数: {hovered.events.length}</div>
           <div className="text-text-secondary">
-            标记: {hovered.missedMed ? '漏服药 ' : ''}{hovered.sleepDeprived ? '睡眠不足' : '无'}
+            标记: {[hovered.missedMed ? '漏服药' : '', hovered.sleepDeprived ? '睡眠不足' : '']
+              .filter(Boolean)
+              .join(' / ') || '无'}
           </div>
         </div>
       )}

@@ -9,6 +9,8 @@ import { useAppStore } from '../../store'
 import type { ProcessedFrame, RiskState, SignalFrame } from '../../types/signal'
 
 const processor = new SignalProcessor()
+const MIN_PREICTAL_SECONDS = 30
+const MAX_PREICTAL_SECONDS = 600
 
 function toRiskState(score: number): RiskState {
   if (score >= 85) return 'seizure'
@@ -26,7 +28,11 @@ function transitionRiskState(prev: RiskState, score: number, sensitivity: number
   const warningExit = warningEnter - 10
   const recoveryExit = recoveryEnter - 8
 
-  if (prev === 'seizure') return score >= seizureExit ? 'seizure' : score >= warningExit ? 'warning' : 'recovery'
+  if (prev === 'seizure') {
+    if (score >= seizureExit) return 'seizure'
+    if (score >= warningExit) return 'warning'
+    return 'recovery'
+  }
   if (prev === 'warning') return score >= seizureEnter ? 'seizure' : score >= warningExit ? 'warning' : 'recovery'
   if (prev === 'recovery') return score >= warningEnter ? 'warning' : score >= recoveryExit ? 'recovery' : 'safe'
   return toRiskState(score - delta)
@@ -123,12 +129,13 @@ export function LiveDashboard(): JSX.Element {
     }
     if (dataSourceMode === 'ble' && bleDeviceId) config.deviceId = bleDeviceId
     if (dataSourceMode === 'mock') {
+      const preictalSec = Math.max(MIN_PREICTAL_SECONDS, Math.min(MAX_PREICTAL_SECONDS, settings.warningLeadMinutes * 60))
       config.sampleIntervalMs = 16
-      config.preictalSec = Math.max(4, settings.warningLeadMinutes * 0.6)
-      config.seizureSec = 5
-      config.recoverySec = 8
-      config.cycleMinSec = 36
-      config.cycleMaxSec = 64
+      config.preictalSec = preictalSec
+      config.seizureSec = 8
+      config.recoverySec = 16
+      config.cycleMinSec = preictalSec + 40
+      config.cycleMaxSec = preictalSec + 120
     }
 
     setConnectionStatus('connecting')

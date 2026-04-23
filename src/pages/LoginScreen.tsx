@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Brain } from 'lucide-react'
 import { useState } from 'react'
+import { MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST } from '../constants/motion'
 import { useAppStore } from '../store'
 import type { Portal } from '../types/user'
 
@@ -42,7 +43,13 @@ export function LoginScreen(): JSX.Element {
           ))}
         </div>
 
-        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: role ? 'auto' : 0, opacity: role ? 1 : 0 }} className="mx-auto mt-5 max-w-md overflow-hidden">
+        <motion.div
+          variants={MOTION_MODAL_CONTENT}
+          initial="initial"
+          animate={role ? 'animate' : 'exit'}
+          transition={MOTION_TRANSITION_FAST}
+          className="mx-auto mt-5 max-w-md overflow-hidden"
+        >
           <div className={`rounded-md border border-border-default bg-bg-2 p-4 ${error ? 'animate-shake' : ''}`}>
             <input className="mb-2 w-full rounded border border-border-default bg-bg-3 px-3 py-2" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="账号" />
             <input className="mb-3 w-full rounded border border-border-default bg-bg-3 px-3 py-2" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="密码" />

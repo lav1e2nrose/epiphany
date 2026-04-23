@@ -27,7 +27,7 @@ export function WaveformReview(): JSX.Element {
 
   useEffect(() => {
     if (!reviewFocusTimestamp) return
-    setWindowEndTs(reviewFocusTimestamp + windowSec * 500)
+    setWindowEndTs(reviewFocusTimestamp + (windowSec * 1000) / 2)
     setReviewFocusTimestamp(null)
   }, [reviewFocusTimestamp, setReviewFocusTimestamp, windowSec])
 
@@ -58,6 +58,12 @@ export function WaveformReview(): JSX.Element {
       },
       ...prev,
     ])
+  }
+
+  const handleContextAnnotate = (type: AnnotationItem['type']): void => {
+    if (!contextMenu) return
+    addAnnotation(contextMenu.timestamp, type)
+    setContextMenu(null)
   }
 
   return (
@@ -97,10 +103,13 @@ export function WaveformReview(): JSX.Element {
           className="relative space-y-3 overflow-auto rounded-md"
           onContextMenu={(event) => {
             event.preventDefault()
+            const rect = event.currentTarget.getBoundingClientRect()
+            const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
+            const clickedTs = Math.round(windowStartTs + ratio * (windowEndTs - windowStartTs))
             setContextMenu({
               x: event.clientX,
               y: event.clientY,
-              timestamp: windowEndTs,
+              timestamp: clickedTs,
             })
           }}
           onClick={() => setContextMenu(null)}
@@ -110,13 +119,13 @@ export function WaveformReview(): JSX.Element {
           <WaveformChart title="EMG 回溯" unit="μV" frames={windowFrames} selector={(f) => f.emg[0] ?? 0} color="#F0883E" annotateArtifacts />
           {contextMenu && (
             <div className="fixed z-50 min-w-40 rounded border border-border-default bg-bg-1 p-1 text-xs" style={{ left: contextMenu.x, top: contextMenu.y }}>
-              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => { addAnnotation(contextMenu.timestamp, 'observation'); setContextMenu(null) }}>
+              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => handleContextAnnotate('observation')}>
                 添加观察注解
               </button>
-              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => { addAnnotation(contextMenu.timestamp, 'artifact'); setContextMenu(null) }}>
+              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => handleContextAnnotate('artifact')}>
                 标记伪迹
               </button>
-              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => { addAnnotation(contextMenu.timestamp, 'clinical'); setContextMenu(null) }}>
+              <button className="block w-full rounded px-2 py-1 text-left hover:bg-bg-3" onClick={() => handleContextAnnotate('clinical')}>
                 标记临床结论
               </button>
             </div>

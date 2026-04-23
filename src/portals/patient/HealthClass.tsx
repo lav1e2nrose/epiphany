@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useState } from 'react'
+import { MOTION_PAGE_VARIANTS, MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 const articles = [
   { id: 'a1', title: '癫痫触发因素识别', read: '6 min', content: '常见触发因素包括睡眠不足、情绪应激、闪光刺激、饮酒。' },
@@ -28,9 +29,11 @@ export function HealthClass(): JSX.Element {
       <AnimatePresence>
         {article && (
           <motion.aside
-            initial={{ x: 420 }}
-            animate={{ x: 0 }}
-            exit={{ x: 420 }}
+            variants={MOTION_PAGE_VARIANTS}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={MOTION_TRANSITION_FAST}
             className="absolute right-0 top-0 h-full w-[420px] rounded-l-lg border border-border-default bg-bg-1 p-4"
           >
             <button className="mb-3 text-sm text-text-secondary" onClick={() => setSelected(null)}>关闭</button>

@@ -8,7 +8,7 @@ export class SignalProcessor {
     let prevLow = 0
     let prevHigh = 0
     return signal.map((value) => {
-      // 单极低通 + 高通串联形成轻量带通，优先保证实时性与低延迟。
+      // 一阶低通 + 高通串联形成轻量带通, 优先保证实时性与低延迟。
       prevLow = prevLow + high * (value - prevLow)
       prevHigh = prevHigh + low * (prevLow - prevHigh)
       return prevLow - prevHigh
@@ -61,7 +61,7 @@ export class SignalProcessor {
       },
       nirsDropRate,
       emgBurst,
-      // 置信度融合：尖波密度 + NIRS 下滑 + EMG 爆发，并扣除运动伪迹造成的误报权重。
+      // 置信度融合：尖波密度 + NIRS 下滑 + EMG 爆发, 并扣除运动伪迹造成的误报权重。
       preIctalConfidence: Math.max(
         0,
         Math.min(1, spikeRatio * 8 + Math.max(0, nirsDropRate) * 0.22 + (emgBurst ? 0.18 : 0) - movementPenalty),

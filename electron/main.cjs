@@ -75,7 +75,16 @@ ipcMain.handle('data:scanBleDevices', () => ['EpiBand-A1', 'EpiBand-B2'])
 ipcMain.handle('data:testConnection', async (_event, payload) => {
   const mode = payload?.mode
   if (mode === 'websocket') {
-    if (!payload?.websocketUrl || !/^wss?:\/\//.test(payload.websocketUrl)) {
+    if (!payload?.websocketUrl) {
+      return { ok: false, message: '请先填写 WebSocket 地址' }
+    }
+    let parsed
+    try {
+      parsed = new URL(payload.websocketUrl)
+    } catch {
+      return { ok: false, message: 'WebSocket 地址格式无效' }
+    }
+    if (!['ws:', 'wss:'].includes(parsed.protocol)) {
       return { ok: false, message: 'WebSocket 地址格式无效' }
     }
     return { ok: true, message: 'WebSocket 握手通过（模拟）' }

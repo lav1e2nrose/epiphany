@@ -16,6 +16,7 @@ import { PatientManagement } from '../../portals/doctor/PatientManagement'
 import { SeizureHeatmapPage } from '../../portals/doctor/SeizureHeatmapPage'
 import { WaveformReview } from '../../portals/doctor/WaveformReview'
 import { ReportGenerator } from '../../portals/doctor/ReportGenerator'
+import { MOTION_PAGE_VARIANTS, MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 function portalNav(portal: Portal): NavItem[] {
   if (portal === 'patient') {
@@ -91,10 +92,11 @@ export function AppShell(): JSX.Element {
           <AnimatePresence mode="wait">
             <motion.div
               key={`${currentPortal}-${activePage}`}
-              initial={{ opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -18 }}
-              transition={{ duration: 0.2 }}
+              variants={MOTION_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={MOTION_TRANSITION_FAST}
               className="h-full"
             >
               {page}
