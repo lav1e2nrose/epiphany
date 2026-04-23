@@ -12,6 +12,7 @@ export function SettingsPage(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [serialPorts, setSerialPorts] = useState<string[]>([])
   const [bleDevices, setBleDevices] = useState<string[]>([])
+  const [systemBusy, setSystemBusy] = useState<'none' | 'update' | 'clear' | 'diag'>('none')
 
   const testConnection = async (): Promise<void> => {
     setLoading(true)
@@ -187,7 +188,75 @@ export function SettingsPage(): JSX.Element {
       </section>
 
       <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm text-text-secondary">
-        应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1
+        <div>应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1</div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <button
+            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
+            disabled={systemBusy !== 'none'}
+            onClick={() =>
+              void (async () => {
+                if (!window.epiphany?.checkForUpdates) return
+                setSystemBusy('update')
+                try {
+                  const result = await window.epiphany.checkForUpdates()
+                  setStatus(result.message)
+                  setStatusTone(result.ok ? 'ok' : 'warn')
+                } catch (error) {
+                  setStatus(error instanceof Error ? error.message : '检查更新失败')
+                  setStatusTone('warn')
+                } finally {
+                  setSystemBusy('none')
+                }
+              })()
+            }
+          >
+            {systemBusy === 'update' ? '检查中...' : '检查更新'}
+          </button>
+          <button
+            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
+            disabled={systemBusy !== 'none'}
+            onClick={() =>
+              void (async () => {
+                if (!window.epiphany?.clearLocalCache) return
+                setSystemBusy('clear')
+                try {
+                  const result = await window.epiphany.clearLocalCache()
+                  setStatus(result.message)
+                  setStatusTone(result.ok ? 'ok' : 'warn')
+                } catch (error) {
+                  setStatus(error instanceof Error ? error.message : '清除缓存失败')
+                  setStatusTone('warn')
+                } finally {
+                  setSystemBusy('none')
+                }
+              })()
+            }
+          >
+            {systemBusy === 'clear' ? '清理中...' : '清除本地缓存'}
+          </button>
+          <button
+            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
+            disabled={systemBusy !== 'none'}
+            onClick={() =>
+              void (async () => {
+                if (!window.epiphany?.exportDiagnosticLog) return
+                setSystemBusy('diag')
+                try {
+                  const result = await window.epiphany.exportDiagnosticLog()
+                  setStatus(result.filePath ? `${result.message}：${result.filePath}` : result.message)
+                  setStatusTone(result.ok ? 'ok' : 'warn')
+                } catch (error) {
+                  setStatus(error instanceof Error ? error.message : '导出诊断日志失败')
+                  setStatusTone('warn')
+                } finally {
+                  setSystemBusy('none')
+                }
+              })()
+            }
+          >
+            {systemBusy === 'diag' ? '导出中...' : '导出诊断日志'}
+          </button>
+        </div>
       </section>
     </div>
   )

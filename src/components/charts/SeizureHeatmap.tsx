@@ -9,14 +9,14 @@ interface Props {
 
 function colorByCell(cell: HeatmapCell): string {
   if (cell.seizureLevel > 0) {
-    const shades = ['#3D1A1A', '#7A2020', '#C0392B', '#F85149']
+    const shades = ['var(--heat-s1)', 'var(--heat-s2)', 'var(--heat-s3)', 'var(--heat-s4)']
     return shades[Math.max(0, Math.min(3, cell.seizureLevel - 1))]
   }
   if (cell.intensity > 0) {
-    const shades = ['#0E4429', '#006D32', '#26A641', '#39D353']
+    const shades = ['var(--heat-1)', 'var(--heat-2)', 'var(--heat-3)', 'var(--heat-4)']
     return shades[Math.max(0, Math.min(3, cell.intensity - 1))]
   }
-  return '#161B22'
+  return 'var(--heat-0)'
 }
 
 export function SeizureHeatmap({ cells, onCellClick }: Props): JSX.Element {
@@ -67,8 +67,8 @@ export function SeizureHeatmap({ cells, onCellClick }: Props): JSX.Element {
             .attr('cx', dateLabelWidth + cell.hour * colWidth + colWidth - 7)
             .attr('cy', rowIndex * rowHeight + 7)
             .attr('r', 4)
-            .attr('fill', cell.missedMed ? '#D29922' : '#388BFD')
-            .attr('stroke', '#0D1117')
+            .attr('fill', cell.missedMed ? 'var(--warn)' : 'var(--recovery)')
+            .attr('stroke', 'var(--bg-1)')
             .attr('stroke-width', 1)
         }
       })

@@ -53,6 +53,7 @@ export interface AppStore {
 
   events: SeizureEvent[]
   addEvent: (event: SeizureEvent) => void
+  updateEventHandling: (eventId: string, handlingStatus: SeizureEvent['handlingStatus']) => void
 
   currentUser: User | null
   currentPortal: Portal
@@ -115,6 +116,14 @@ export const useAppStore = create<AppStore>((set) => ({
     set((state) => ({ events: [event, ...state.events].slice(0, 300) }))
     void window.epiphany?.addEvent(event)
   },
+  updateEventHandling: (eventId, handlingStatus) => {
+    set((state) => ({
+      events: state.events.map((event) => (event.id === eventId ? { ...event, handlingStatus } : event)),
+    }))
+    if (handlingStatus) {
+      void window.epiphany?.updateEventHandling(eventId, handlingStatus)
+    }
+  },
 
   currentUser: null,
   currentPortal: 'patient',
@@ -125,7 +134,14 @@ export const useAppStore = create<AppStore>((set) => ({
   consumeRequestedPage: () => set({ requestedPage: null }),
 
   alerts: [],
-  pushAlert: (alert) => set((state) => ({ alerts: [...state.alerts, alert].slice(-10) })),
+  pushAlert: (alert) =>
+    set((state) => {
+      const nextAlert: Alert = {
+        ...alert,
+        handlingStatus: alert.handlingStatus ?? 'pending',
+      }
+      return { alerts: [...state.alerts, nextAlert].slice(-10) }
+    }),
   dismissAlert: (id) => set((state) => ({ alerts: state.alerts.filter((alert) => alert.id !== id) })),
 
   patients: demoPatients,

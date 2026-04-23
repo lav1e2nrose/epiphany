@@ -1,4 +1,4 @@
-import type { SeizureEvent } from './events'
+import type { HandlingStatus, SeizureEvent } from './events'
 import type { AppSettings } from './user'
 
 interface PersistedState {
@@ -24,6 +24,7 @@ type EpiphanyBridge = {
   getSettings: () => Promise<Partial<AppSettings>>
   getPersistedState: () => Promise<PersistedState>
   addEvent: (event: SeizureEvent) => Promise<void>
+  updateEventHandling: (eventId: string, handlingStatus: HandlingStatus) => Promise<void>
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   listSerialPorts: () => Promise<string[]>
   scanBleDevices: () => Promise<string[]>
@@ -35,7 +36,11 @@ type EpiphanyBridge = {
     patientId?: string
     rangeDays?: number
     includeSignature?: boolean
-  }) => Promise<{ ok: boolean; fileName: string }>
+  }) => Promise<{ ok: boolean; fileName: string; filePath: string }>
+  showItemInFolder: (filePath: string) => Promise<boolean>
+  checkForUpdates: () => Promise<{ ok: boolean; message: string }>
+  clearLocalCache: () => Promise<{ ok: boolean; message: string }>
+  exportDiagnosticLog: () => Promise<{ ok: boolean; filePath?: string; message: string }>
   onExportProgress: (callback: (payload: ExportProgressPayload) => void) => () => void
 }
 

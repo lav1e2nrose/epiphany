@@ -33,8 +33,8 @@ export function RemoteMonitor(): JSX.Element {
 
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <div className="mb-3 flex justify-end gap-2 text-xs">
-          <button className="rounded border border-border-default px-2 py-1" onClick={() => pushAlert({ id: `${Date.now()}-warn`, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: Date.now() })}>触发黄色报警测试</button>
-          <button className="rounded border border-danger/70 px-2 py-1 text-danger" onClick={() => pushAlert({ id: `${Date.now()}-danger`, type: 'error', title: '红色报警测试', message: '监测到发作事件', timestamp: Date.now(), sticky: true })}>触发红色报警测试</button>
+          <button className="rounded border border-border-default px-2 py-1" onClick={() => pushAlert({ id: `${Date.now()}-warn`, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: Date.now(), handlingStatus: 'pending' })}>触发黄色报警测试</button>
+          <button className="rounded border border-danger/70 px-2 py-1 text-danger" onClick={() => pushAlert({ id: `${Date.now()}-danger`, type: 'error', title: '红色报警测试', message: '监测到发作事件', timestamp: Date.now(), sticky: true, handlingStatus: 'pending' })}>触发红色报警测试</button>
         </div>
         <table className="w-full text-sm">
           <thead className="text-text-secondary">

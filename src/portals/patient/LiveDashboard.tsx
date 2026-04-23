@@ -107,6 +107,8 @@ export function LiveDashboard(): JSX.Element {
             title: stableRiskState === 'seizure' ? '发作高风险告警' : '监测到预警信号',
             message: `当前风险分 ${Math.round(score)}`,
             timestamp: now,
+            handlingStatus: 'pending',
+            riskState: stableRiskState,
           })
           addEvent({
             id: `${now}-alert-event`,
@@ -114,6 +116,7 @@ export function LiveDashboard(): JSX.Element {
             title: stableRiskState === 'seizure' ? '高风险发作告警' : '发作预警',
             timestamp: now,
             riskState: stableRiskState,
+            handlingStatus: 'pending',
           })
         }
       }
@@ -178,8 +181,8 @@ export function LiveDashboard(): JSX.Element {
           <p className="mt-2 text-sm text-text-secondary">Pre-ictal 置信度 {(confidence * 100).toFixed(0)}%</p>
           <p className="mt-1 text-sm text-text-secondary">预计 5-10 分钟内可能发作，请寻找安全位置。</p>
           <div className="mt-4 flex justify-end gap-2">
-            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => addEvent({ id: `${Date.now()}-true`, type: 'feedback', title: '确认为发作', timestamp: Date.now() })}>确实发作了</button>
-            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => addEvent({ id: `${Date.now()}-false`, type: 'feedback', title: '误报反馈', timestamp: Date.now() })}>这是误报</button>
+            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => addEvent({ id: `${Date.now()}-true`, type: 'feedback', title: '确认为发作', timestamp: Date.now(), feedbackResult: 'true_positive', handlingStatus: 'resolved' })}>确实发作了</button>
+            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => addEvent({ id: `${Date.now()}-false`, type: 'feedback', title: '误报反馈', timestamp: Date.now(), feedbackResult: 'false_positive', handlingStatus: 'resolved' })}>这是误报</button>
           </div>
         </div>
       </div>
@@ -194,7 +197,25 @@ export function LiveDashboard(): JSX.Element {
           <SOSButton
             holdDuration={3000}
             onTrigger={() => {
-              pushAlert({ id: `${Date.now()}-sos`, type: 'sos', title: 'SOS 已触发', message: '紧急联系人已通知', timestamp: Date.now(), sticky: true })
+              const eventId = `${Date.now()}-sos-event`
+              pushAlert({
+                id: `${Date.now()}-sos`,
+                type: 'sos',
+                title: 'SOS 已触发',
+                message: '紧急联系人已通知',
+                timestamp: Date.now(),
+                sticky: true,
+                handlingStatus: 'pending',
+                linkedEventId: eventId,
+              })
+              addEvent({
+                id: eventId,
+                type: 'sos',
+                title: '患者触发 SOS',
+                timestamp: Date.now(),
+                riskState: 'emergency',
+                handlingStatus: 'pending',
+              })
               setEmergencyVisible(true)
             }}
           />
