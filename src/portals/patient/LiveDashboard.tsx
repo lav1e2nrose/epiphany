@@ -7,10 +7,12 @@ import { WaveformChart } from '../../components/charts/WaveformChart'
 import { SignalProcessor } from '../../data/SignalProcessor'
 import { useAppStore } from '../../store'
 import type { ProcessedFrame, RiskState, SignalFrame } from '../../types/signal'
+import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts'
 
 const processor = new SignalProcessor()
 const MIN_PREICTAL_SECONDS = 30
 const MAX_PREICTAL_SECONDS = 600
+const MEDICATION_HOURS = [8, 14, 20]
 
 function nextId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -45,6 +47,14 @@ function transitionRiskState(prev: RiskState, score: number, sensitivity: number
   return toRiskState(score - delta)
 }
 
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
 export function LiveDashboard(): JSX.Element {
   const dataSource = useAppStore((state) => state.dataSource)
   const settings = useAppStore((state) => state.settings)
@@ -67,6 +77,7 @@ export function LiveDashboard(): JSX.Element {
   const updateEventHandling = useAppStore((state) => state.updateEventHandling)
   const updateAlertHandling = useAppStore((state) => state.updateAlertHandling)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
+  const [nowTs, setNowTs] = useState(Date.now())
   const historyRef = useRef<ProcessedFrame[]>(frameBuffer)
   const riskRef = useRef<RiskState>('safe')
   const lastAlertTsRef = useRef(0)
@@ -225,6 +236,47 @@ export function LiveDashboard(): JSX.Element {
     )
   }, [confidence, riskState, submitFeedback])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTs(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const summary = useMemo(() => {
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const startOfYesterday = startOfToday.getTime() - 24 * 3600 * 1000
+    const todayStartTs = startOfToday.getTime()
+    const todayCount = events.filter((event) => event.timestamp >= todayStartTs && event.riskState === 'seizure').length
+    const yesterdayCount = events.filter((event) => event.timestamp >= startOfYesterday && event.timestamp < todayStartTs && event.riskState === 'seizure').length
+    const diff = todayCount - yesterdayCount
+    const latestEvent = events.find((event) => event.riskState === 'seizure' || event.riskState === 'warning')
+    return { todayCount, yesterdayCount, diff, latestEvent }
+  }, [events])
+
+  const adherence = useMemo(() => {
+    const total = 21
+    const taken = Math.round((total * (80 + Math.min(18, confidence * 20))) / 100)
+    return { total, taken, percent: Math.round((taken / total) * 100) }
+  }, [confidence])
+
+  const medicationCountdownMs = useMemo(() => {
+    const now = new Date(nowTs)
+    const candidateTimes = [...MEDICATION_HOURS, MEDICATION_HOURS[0] + 24]
+      .map((hour) => {
+        const candidate = new Date(now)
+        candidate.setHours(hour % 24, 0, 0, 0)
+        if (hour >= 24) {
+          candidate.setDate(candidate.getDate() + 1)
+        }
+        return candidate.getTime()
+      })
+      .filter((ts) => ts > nowTs)
+    return Math.max(0, (candidateTimes[0] ?? nowTs) - nowTs)
+  }, [nowTs])
+
+  const latencyMs = latest ? Math.max(0, nowTs - latest.timestamp) : null
+  const fusionDotClass = riskState === 'seizure' ? 'bg-danger' : riskState === 'warning' ? 'bg-warn' : 'bg-[#39D0D8]'
+
   return (
     <div className="grid h-full grid-cols-[300px_1fr_260px] gap-4">
       <div className="space-y-4">
@@ -264,23 +316,63 @@ export function LiveDashboard(): JSX.Element {
         <WaveformChart title="EEG" unit="μV" frames={frameBuffer} selector={(f) => f.eeg[0] ?? 0} color="#39D0D8" />
         <WaveformChart title="NIRS" unit="%" frames={frameBuffer} selector={(f) => f.nirs.spo2} color="#A371F7" />
         <WaveformChart title="EMG" unit="μV" frames={frameBuffer} selector={(f) => f.emg[0] ?? 0} color="#F0883E" />
+        <div className="rounded-md border border-border-default bg-bg-2 px-3 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block h-2.5 w-2.5 animate-pulse rounded-full ${fusionDotClass}`} />
+              <span className="text-[#39D0D8]">融合监测中</span>
+            </div>
+            <span className="font-mono text-text-secondary">置信度 {(confidence * 100).toFixed(0)}%</span>
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-2 text-[11px] text-text-secondary">
+            <div>算法版本：v2.3.1-fusion</div>
+            <div className="font-mono">延迟：{latencyMs === null ? '--' : `${latencyMs}ms`}</div>
+            <div>数据源：{dataSourceMode.toUpperCase()}</div>
+            <div>样本窗：最近 30 秒</div>
+          </div>
+        </div>
       </div>
       <div className="space-y-3">
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">今日发作次数</div>
-          <div className="mt-2 font-mono text-3xl">3</div>
+          <div className="mt-2 flex items-end justify-between">
+            <div className="font-mono text-3xl">{summary.todayCount}</div>
+            <div className={`text-xs ${summary.diff > 0 ? 'text-danger' : summary.diff < 0 ? 'text-safe' : 'text-text-secondary'}`}>
+              {summary.diff > 0 ? '↑' : summary.diff < 0 ? '↓' : '→'} {Math.abs(summary.diff)} vs 昨日
+            </div>
+          </div>
         </div>
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">上次事件</div>
-          <div className="mt-2 text-sm">03:42 · 持续 2m14s</div>
+          <div className="mt-2 text-sm">
+            {summary.latestEvent
+              ? `${new Date(summary.latestEvent.timestamp).toLocaleTimeString('zh-CN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })} · 持续 ${summary.latestEvent.durationSec ? `${summary.latestEvent.durationSec}s` : '未记录'}`
+              : '暂无事件'}
+          </div>
         </div>
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">服药依从性</div>
-          <div className="mt-2 text-2xl font-mono">87%</div>
+          <div className="mt-2 h-[130px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadialBarChart data={[{ value: adherence.percent }]} startAngle={90} endAngle={-270} innerRadius="64%" outerRadius="92%">
+                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                <RadialBar dataKey="value" cornerRadius={8} fill="var(--accent)" background={{ fill: 'var(--bg-3)' }} />
+                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-text-primary font-mono text-[20px]">
+                  {adherence.percent}%
+                </text>
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="text-center text-xs text-text-secondary">{adherence.taken}/{adherence.total} 次</div>
         </div>
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">下次服药倒计时</div>
-          <div className="mt-2 font-mono text-xl text-warn">00:48:12</div>
+          <div className={`mt-2 font-mono text-xl ${medicationCountdownMs <= 60 * 60 * 1000 ? 'text-warn' : 'text-text-primary'}`}>
+            {formatCountdown(medicationCountdownMs)}
+          </div>
         </div>
       </div>
       {seizureModal}

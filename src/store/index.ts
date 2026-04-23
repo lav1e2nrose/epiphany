@@ -81,6 +81,8 @@ export interface AppStore {
   dismissAlert: (id: string) => void
 
   patients: Patient[]
+  selectedDoctorPatientId: string | null
+  setSelectedDoctorPatientId: (patientId: string | null) => void
 
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
@@ -181,6 +183,8 @@ export const useAppStore = create<AppStore>((set) => ({
   },
 
   patients: demoPatients,
+  selectedDoctorPatientId: demoPatients[0]?.id ?? null,
+  setSelectedDoctorPatientId: (patientId) => set({ selectedDoctorPatientId: patientId }),
 
   settings: defaultSettings,
   updateSettings: (patch) => {
