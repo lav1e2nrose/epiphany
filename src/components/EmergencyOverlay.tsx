@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { MOTION_MODAL_BACKDROP, MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST } from '../constants/motion'
 
 interface Props {
   visible: boolean
@@ -23,15 +24,19 @@ export function EmergencyOverlay({
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          variants={MOTION_MODAL_BACKDROP}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={MOTION_TRANSITION_FAST}
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0D0000]/90 backdrop-blur"
         >
           <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.96, opacity: 0 }}
+            variants={MOTION_MODAL_CONTENT}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={MOTION_TRANSITION_FAST}
             className="w-[560px] rounded-xl border border-danger/60 bg-bg-1 p-6"
           >
             <h2 className="text-2xl font-semibold text-danger">{title}</h2>

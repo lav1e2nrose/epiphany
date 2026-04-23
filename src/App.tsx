@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { AlertToast } from './components/AlertToast'
 import { EmergencyOverlay } from './components/EmergencyOverlay'
 import { MockModeBanner } from './components/MockModeBanner'
@@ -14,6 +14,7 @@ export default function App(): JSX.Element {
   const currentPortal = useAppStore((state) => state.currentPortal)
   const alerts = useAppStore((state) => state.alerts)
   const dismissAlert = useAppStore((state) => state.dismissAlert)
+  const hydratePersistedState = useAppStore((state) => state.hydratePersistedState)
   const riskScore = useAppStore((state) => state.riskScore)
   const emergencyAlert = useMemo(
     () => [...alerts].reverse().find((alert) => alert.sticky && (alert.type === 'error' || alert.type === 'sos')) ?? null,
@@ -29,6 +30,14 @@ export default function App(): JSX.Element {
       </>
     )
   }, [currentUser])
+
+  useEffect(() => {
+    if (!window.epiphany?.getPersistedState) return
+    void window.epiphany
+      .getPersistedState()
+      .then((persisted) => hydratePersistedState(persisted))
+      .catch(() => undefined)
+  }, [hydratePersistedState])
 
   return (
     <div>

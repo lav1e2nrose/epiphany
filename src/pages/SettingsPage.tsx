@@ -8,6 +8,7 @@ export function SettingsPage(): JSX.Element {
   const setDataSourceMode = useAppStore((state) => state.setDataSourceMode)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [status, setStatus] = useState('')
+  const [statusTone, setStatusTone] = useState<'idle' | 'ok' | 'warn'>('idle')
   const [loading, setLoading] = useState(false)
   const [serialPorts, setSerialPorts] = useState<string[]>([])
   const [bleDevices, setBleDevices] = useState<string[]>([])
@@ -15,31 +16,26 @@ export function SettingsPage(): JSX.Element {
   const testConnection = async (): Promise<void> => {
     setLoading(true)
     setStatus('连接中...')
+    setStatusTone('idle')
     try {
-      if (settings.dataSourceMode === 'websocket') {
-        const ws = new WebSocket(settings.websocketUrl)
-        await new Promise<void>((resolve, reject) => {
-          const timer = window.setTimeout(() => reject(new Error('WebSocket timeout')), 2000)
-          ws.onopen = () => {
-            window.clearTimeout(timer)
-            ws.close()
-            resolve()
-          }
-          ws.onerror = () => {
-            window.clearTimeout(timer)
-            reject(new Error('WebSocket unavailable'))
-          }
+      if (window.epiphany?.testConnection) {
+        const response = await window.epiphany.testConnection({
+          mode: settings.dataSourceMode,
+          websocketUrl: settings.websocketUrl,
+          serialPort: settings.serialPort,
+          bleDeviceId: settings.bleDeviceId,
         })
-      } else if (settings.dataSourceMode === 'serial') {
-        const ports = await window.epiphany?.listSerialPorts()
-        if (!ports?.includes(settings.serialPort)) throw new Error('串口未找到')
-      } else if (settings.dataSourceMode === 'ble') {
-        if (!settings.bleDeviceId) throw new Error('请先选择 BLE 设备')
+        if (!response.ok) throw new Error(response.message)
+        setStatus(`连接成功 ✓ ${response.message}`)
+        setStatusTone('ok')
+      } else {
+        setStatus('连接成功 ✓ 浏览器模式（未接入 Electron 测试接口）')
+        setStatusTone('warn')
       }
-      setStatus('连接成功 ✓')
     } catch (error) {
       const message = error instanceof Error ? error.message : '连接失败'
       setStatus(`连接失败 ✕ ${message}`)
+      setStatusTone('warn')
     } finally {
       setLoading(false)
     }
@@ -108,10 +104,12 @@ export function SettingsPage(): JSX.Element {
                 .then((ports) => {
                   setSerialPorts(ports ?? [])
                   setStatus('串口列表已刷新')
+                  setStatusTone('ok')
                 })
                 .catch((error: unknown) => {
                   const message = error instanceof Error ? error.message : '串口扫描失败'
                   setStatus(`串口扫描失败 ✕ ${message}`)
+                  setStatusTone('warn')
                 })
             }
           >
@@ -125,16 +123,18 @@ export function SettingsPage(): JSX.Element {
                 .then((devices) => {
                   setBleDevices(devices ?? [])
                   setStatus('BLE 设备扫描完成')
+                  setStatusTone('ok')
                 })
                 .catch((error: unknown) => {
                   const message = error instanceof Error ? error.message : 'BLE 扫描失败'
                   setStatus(`BLE 扫描失败 ✕ ${message}`)
+                  setStatusTone('warn')
                 })
             }
           >
             扫描 BLE
           </button>
-          <span className="text-xs text-text-secondary">{status}</span>
+          <span className={`text-xs ${statusTone === 'ok' ? 'text-safe' : statusTone === 'warn' ? 'text-danger' : 'text-text-secondary'}`}>{status}</span>
         </div>
       </section>
 

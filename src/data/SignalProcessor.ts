@@ -5,10 +5,13 @@ export class SignalProcessor {
     const nyquist = sampleRate / 2
     const low = Math.max(0.001, lowHz / nyquist)
     const high = Math.min(0.999, highHz / nyquist)
-    let prev = 0
+    let prevLow = 0
+    let prevHigh = 0
     return signal.map((value) => {
-      prev = prev + low * (value - prev)
-      return prev * high
+      // 一阶低通 + 高通串联形成轻量带通, 优先保证实时性与低延迟。
+      prevLow = prevLow + high * (value - prevLow)
+      prevHigh = prevHigh + low * (prevLow - prevHigh)
+      return prevLow - prevHigh
     })
   }
 
@@ -26,7 +29,7 @@ export class SignalProcessor {
     const eegVariance = this.variance(frame.eeg)
 
     if (imuMag > 15 || emgPower > 120) artifacts.push('movement')
-    if (eegVariance < 1) artifacts.push('electrode_pop')
+    if (eegVariance < 1.2) artifacts.push('electrode_pop')
     if (frame.eeg.some((v) => Math.abs(v) > 120)) artifacts.push('power_line')
     return artifacts
   }
@@ -34,12 +37,18 @@ export class SignalProcessor {
   extractFeatures(windowFrames: SignalFrame[]): SeizureFeatures {
     const flatEeg = windowFrames.flatMap((f) => f.eeg)
     const spikes = flatEeg.filter((value) => Math.abs(value) > 50).length
+    const total = Math.max(1, flatEeg.length)
+    const spikeRatio = spikes / total
     const nirsDropRate =
       windowFrames.length > 1
         ? (windowFrames[0].nirs.spo2 - windowFrames[windowFrames.length - 1].nirs.spo2) /
           windowFrames.length
         : 0
     const emgBurst = windowFrames.some((f) => f.emg.some((value) => Math.abs(value) > 80))
+    const accel = windowFrames
+      .map((f) => (f.imu ? Math.sqrt(f.imu.ax ** 2 + f.imu.ay ** 2 + f.imu.az ** 2) : 0))
+      .reduce((sum, v) => sum + v, 0) / Math.max(1, windowFrames.length)
+    const movementPenalty = accel > 14 ? 0.08 : 0
 
     return {
       spikeCount: spikes,
@@ -52,18 +61,26 @@ export class SignalProcessor {
       },
       nirsDropRate,
       emgBurst,
-      preIctalConfidence: Math.min(1, spikes / 200 + Math.max(0, nirsDropRate) * 0.1 + (emgBurst ? 0.2 : 0)),
+      // 置信度融合：尖波密度 + NIRS 下滑 + EMG 爆发, 并扣除运动伪迹造成的误报权重。
+      preIctalConfidence: Math.max(
+        0,
+        Math.min(1, spikeRatio * 8 + Math.max(0, nirsDropRate) * 0.22 + (emgBurst ? 0.18 : 0) - movementPenalty),
+      ),
     }
   }
 
   computeRiskScore(features: SeizureFeatures, history: ProcessedFrame[]): number {
-    const historyBoost = history.slice(-20).reduce((sum, frame) => sum + frame.riskScore, 0) / 20 || 0
+    const recent = history.slice(-40)
+    const historyBoost =
+      recent.length > 0 ? recent.reduce((sum, frame) => sum + frame.riskScore, 0) / recent.length : 0
+    const trendBoost = recent.length > 1 ? Math.max(0, recent[recent.length - 1].riskScore - recent[0].riskScore) * 0.1 : 0
     const raw =
-      features.preIctalConfidence * 60 +
-      Math.min(20, features.spikeCount / 8) +
-      Math.min(10, Math.max(0, features.nirsDropRate) * 8) +
-      (features.emgBurst ? 12 : 0) +
-      historyBoost * 0.2
+      features.preIctalConfidence * 62 +
+      Math.min(16, features.spikeCount / 10) +
+      Math.min(12, Math.max(0, features.nirsDropRate) * 11) +
+      (features.emgBurst ? 8 : 0) +
+      historyBoost * 0.2 +
+      trendBoost
     return Math.max(0, Math.min(100, raw))
   }
 

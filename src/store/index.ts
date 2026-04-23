@@ -58,6 +58,9 @@ export interface AppStore {
   currentPortal: Portal
   login: (user: User) => void
   switchPortal: (portal: Portal) => void
+  requestedPage: string | null
+  requestPage: (page: string) => void
+  consumeRequestedPage: () => void
 
   alerts: Alert[]
   pushAlert: (alert: Alert) => void
@@ -67,6 +70,10 @@ export interface AppStore {
 
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
+  hydratePersistedState: (persisted: { events?: SeizureEvent[]; settings?: Partial<AppSettings> }) => void
+
+  reviewFocusTimestamp: number | null
+  setReviewFocusTimestamp: (timestamp: number | null) => void
 }
 
 function createDataSource(mode: AppSettings['dataSourceMode']): IDataSource {
@@ -113,6 +120,9 @@ export const useAppStore = create<AppStore>((set) => ({
   currentPortal: 'patient',
   login: (user) => set({ currentUser: user, currentPortal: user.role }),
   switchPortal: (portal) => set({ currentPortal: portal }),
+  requestedPage: null,
+  requestPage: (page) => set({ requestedPage: page }),
+  consumeRequestedPage: () => set({ requestedPage: null }),
 
   alerts: [],
   pushAlert: (alert) => set((state) => ({ alerts: [...state.alerts, alert].slice(-10) })),
@@ -125,4 +135,16 @@ export const useAppStore = create<AppStore>((set) => ({
     set((state) => ({ settings: { ...state.settings, ...patch } }))
     void window.epiphany?.updateSettings(patch)
   },
+  hydratePersistedState: (persisted) =>
+    set((state) => {
+      const nextSettings = { ...state.settings, ...(persisted.settings ?? {}) }
+      return {
+        events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300) : state.events,
+        settings: nextSettings,
+        dataSource: createDataSource(nextSettings.dataSourceMode),
+      }
+    }),
+
+  reviewFocusTimestamp: null,
+  setReviewFocusTimestamp: (timestamp) => set({ reviewFocusTimestamp: timestamp }),
 }))

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ActivitySquare, BookOpen, ClipboardList, FileText, HeartPulse, History, LayoutGrid, MapPinned, Settings, Siren, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { Portal } from '../../types/user'
 import { Sidebar, type NavItem } from './Sidebar'
@@ -16,6 +16,7 @@ import { PatientManagement } from '../../portals/doctor/PatientManagement'
 import { SeizureHeatmapPage } from '../../portals/doctor/SeizureHeatmapPage'
 import { WaveformReview } from '../../portals/doctor/WaveformReview'
 import { ReportGenerator } from '../../portals/doctor/ReportGenerator'
+import { MOTION_PAGE_VARIANTS, MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 function portalNav(portal: Portal): NavItem[] {
   if (portal === 'patient') {
@@ -45,8 +46,23 @@ function portalNav(portal: Portal): NavItem[] {
 
 export function AppShell(): JSX.Element {
   const currentPortal = useAppStore((state) => state.currentPortal)
+  const requestedPage = useAppStore((state) => state.requestedPage)
+  const consumeRequestedPage = useAppStore((state) => state.consumeRequestedPage)
   const [activePage, setActivePage] = useState('live')
   const nav = useMemo(() => portalNav(currentPortal), [currentPortal])
+
+  useEffect(() => {
+    const fallback = nav[0]?.key
+    if (fallback) setActivePage(fallback)
+  }, [nav])
+
+  useEffect(() => {
+    if (!requestedPage) return
+    if (nav.some((item) => item.key === requestedPage)) {
+      setActivePage(requestedPage)
+    }
+    consumeRequestedPage()
+  }, [consumeRequestedPage, nav, requestedPage])
 
   const page = useMemo(() => {
     const key = activePage || nav[0]?.key
@@ -76,10 +92,11 @@ export function AppShell(): JSX.Element {
           <AnimatePresence mode="wait">
             <motion.div
               key={`${currentPortal}-${activePage}`}
-              initial={{ opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -18 }}
-              transition={{ duration: 0.2 }}
+              variants={MOTION_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={MOTION_TRANSITION_FAST}
               className="h-full"
             >
               {page}
