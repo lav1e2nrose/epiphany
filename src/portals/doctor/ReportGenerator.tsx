@@ -83,6 +83,16 @@ export function ReportGenerator(): JSX.Element {
 
   return (
     <div className="grid h-full grid-cols-[40%_1fr] gap-3">
+      {exporting && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/55 backdrop-blur-sm">
+          <div className="w-[420px] rounded-md border border-border-default bg-bg-2 p-4">
+            <div className="text-sm">正在生成报告... {stage} · {progress}%</div>
+            <div className="mt-2 h-2 rounded-full bg-bg-3">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报告生成器</h2>
         <div className="mt-3 space-y-3 text-sm">
@@ -149,7 +159,7 @@ export function ReportGenerator(): JSX.Element {
             {doctorNote.trim() || '无'}
           </div>
         </div>
-        {progress > 0 && (
+        {progress > 0 && !exporting && (
           <div className="mt-3">
             <div className="text-sm">正在生成报告... {stage} · {progress}%</div>
             <div className="mt-1 h-2 rounded-full bg-bg-3">

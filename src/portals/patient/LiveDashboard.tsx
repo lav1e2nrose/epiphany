@@ -61,8 +61,11 @@ export function LiveDashboard(): JSX.Element {
   const frameBuffer = useAppStore((state) => state.frameBuffer)
   const riskState = useAppStore((state) => state.riskState)
   const riskScore = useAppStore((state) => state.riskScore)
+  const events = useAppStore((state) => state.events)
   const pushAlert = useAppStore((state) => state.pushAlert)
   const addEvent = useAppStore((state) => state.addEvent)
+  const updateEventHandling = useAppStore((state) => state.updateEventHandling)
+  const updateAlertHandling = useAppStore((state) => state.updateAlertHandling)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
   const historyRef = useRef<ProcessedFrame[]>(frameBuffer)
   const riskRef = useRef<RiskState>('safe')
@@ -184,6 +187,7 @@ export function LiveDashboard(): JSX.Element {
   const confidence = latest?.features.preIctalConfidence ?? 0
   const submitFeedback = useCallback(
     (feedbackResult: 'true_positive' | 'false_positive'): void => {
+      const pendingIncident = events.find((event) => (event.type === 'alert' || event.type === 'sos') && event.handlingStatus === 'pending')
       addEvent({
         id: nextId(`feedback-${feedbackResult}`),
         type: 'feedback',
@@ -191,9 +195,17 @@ export function LiveDashboard(): JSX.Element {
         timestamp: Date.now(),
         feedbackResult,
         handlingStatus: 'resolved',
+        relatedEventId: pendingIncident?.id,
+        linkedAlertId: pendingIncident?.linkedAlertId,
       })
+      if (pendingIncident) {
+        updateEventHandling(pendingIncident.id, 'resolved')
+        if (pendingIncident.linkedAlertId) {
+          updateAlertHandling(pendingIncident.linkedAlertId, 'resolved')
+        }
+      }
     },
-    [addEvent],
+    [addEvent, events, updateAlertHandling, updateEventHandling],
   )
 
   const seizureModal = useMemo(() => {

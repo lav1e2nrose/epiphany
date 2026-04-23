@@ -1,8 +1,9 @@
-import type { HandlingStatus, SeizureEvent } from './events'
+import type { Alert, HandlingStatus, SeizureEvent } from './events'
 import type { AppSettings } from './user'
 
 interface PersistedState {
   events: SeizureEvent[]
+  alerts: Alert[]
   settings: Partial<AppSettings>
 }
 
@@ -24,7 +25,10 @@ type EpiphanyBridge = {
   getSettings: () => Promise<Partial<AppSettings>>
   getPersistedState: () => Promise<PersistedState>
   addEvent: (event: SeizureEvent) => Promise<void>
+  addAlert: (alert: Alert) => Promise<void>
   updateEventHandling: (eventId: string, handlingStatus: HandlingStatus) => Promise<void>
+  updateAlertHandling: (alertId: string, handlingStatus: HandlingStatus) => Promise<void>
+  dismissAlert: (alertId: string) => Promise<void>
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   listSerialPorts: () => Promise<string[]>
   scanBleDevices: () => Promise<string[]>

@@ -15,8 +15,11 @@ export interface SeizureEvent {
   handlingStatus: HandlingStatus
   /** 关联的告警 ID（用于将事件与告警队列统一追踪） */
   linkedAlertId?: string
+  /** 关联的事件 ID（用于将反馈与预警/告警统一追踪） */
+  relatedEventId?: string
   /** 用户对预警结果的反馈（命中 / 误报） */
   feedbackResult?: FeedbackResult
+  handledAt?: number
 }
 
 export interface Alert {
@@ -29,4 +32,6 @@ export interface Alert {
   handlingStatus?: HandlingStatus
   linkedEventId?: string
   riskState?: RiskState
+  feedbackResult?: FeedbackResult
+  handledAt?: number
 }
