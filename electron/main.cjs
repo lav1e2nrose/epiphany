@@ -10,6 +10,14 @@ const store = new Store({
   },
 })
 
+function asArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function asObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -44,13 +52,18 @@ ipcMain.handle('window:action', (event, action) => {
   if (action === 'close') win.close()
 })
 
-ipcMain.handle('store:getEvents', () => store.get('events', []))
+ipcMain.handle('store:getEvents', () => asArray(store.get('events', [])))
+ipcMain.handle('store:getSettings', () => asObject(store.get('settings', {})))
+ipcMain.handle('store:getPersistedState', () => ({
+  events: asArray(store.get('events', [])),
+  settings: asObject(store.get('settings', {})),
+}))
 ipcMain.handle('store:addEvent', (_event, payload) => {
-  const events = store.get('events', [])
+  const events = asArray(store.get('events', []))
   store.set('events', [...events, payload])
 })
 ipcMain.handle('store:updateSettings', (_event, patch) => {
-  const settings = store.get('settings', {})
+  const settings = asObject(store.get('settings', {}))
   store.set('settings', { ...settings, ...patch })
 })
 ipcMain.handle('data:listSerialPorts', () => [])

@@ -67,6 +67,7 @@ export interface AppStore {
 
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
+  hydratePersistedState: (persisted: { events?: SeizureEvent[]; settings?: Partial<AppSettings> }) => void
 }
 
 function createDataSource(mode: AppSettings['dataSourceMode']): IDataSource {
@@ -125,4 +126,13 @@ export const useAppStore = create<AppStore>((set) => ({
     set((state) => ({ settings: { ...state.settings, ...patch } }))
     void window.epiphany?.updateSettings(patch)
   },
+  hydratePersistedState: (persisted) =>
+    set((state) => {
+      const nextSettings = { ...state.settings, ...(persisted.settings ?? {}) }
+      return {
+        events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300) : state.events,
+        settings: nextSettings,
+        dataSource: createDataSource(nextSettings.dataSourceMode),
+      }
+    }),
 }))
