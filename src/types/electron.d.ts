@@ -6,6 +6,18 @@ interface PersistedState {
   settings: Partial<AppSettings>
 }
 
+interface ExportProgressPayload {
+  stage: string
+  progress: number
+}
+
+interface ConnectionTestPayload {
+  mode: AppSettings['dataSourceMode']
+  websocketUrl?: string
+  serialPort?: string
+  bleDeviceId?: string
+}
+
 type EpiphanyBridge = {
   windowAction: (action: 'minimize' | 'maximize' | 'close') => Promise<void>
   getEvents: () => Promise<SeizureEvent[]>
@@ -15,7 +27,16 @@ type EpiphanyBridge = {
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   listSerialPorts: () => Promise<string[]>
   scanBleDevices: () => Promise<string[]>
-  exportPdf: (fileName: string) => Promise<{ ok: boolean; fileName: string }>
+  testConnection: (payload: ConnectionTestPayload) => Promise<{ ok: boolean; message: string }>
+  exportPdf: (payload: {
+    fileName: string
+    modules: string[]
+    note: string
+    patientId?: string
+    rangeDays?: number
+    includeSignature?: boolean
+  }) => Promise<{ ok: boolean; fileName: string }>
+  onExportProgress: (callback: (payload: ExportProgressPayload) => void) => () => void
 }
 
 declare global {

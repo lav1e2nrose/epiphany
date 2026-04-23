@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 
 const REPORT_MODULE_OPTIONS = [
@@ -10,8 +10,12 @@ type ReportModuleKey = (typeof REPORT_MODULE_OPTIONS)[number]['key']
 
 export function ReportGenerator(): JSX.Element {
   const pushAlert = useAppStore((state) => state.pushAlert)
+  const patients = useAppStore((state) => state.patients)
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('all')
+  const [rangeDays, setRangeDays] = useState(7)
+  const [includeSignature, setIncludeSignature] = useState(true)
   const [selectedModules, setSelectedModules] = useState<Record<ReportModuleKey, boolean>>({
     stats: true,
     heatmap: true,
@@ -23,25 +27,26 @@ export function ReportGenerator(): JSX.Element {
 
   const exportPdf = async (): Promise<void> => {
     if (exporting) return
+    let unsubscribeProgress: (() => void) | undefined
     try {
-      setStage('数据收集')
-      setProgress(20)
-      await new Promise((resolve) => window.setTimeout(resolve, 300))
-
-      setStage('图表渲染')
-      setProgress(40)
-      await new Promise((resolve) => window.setTimeout(resolve, 300))
-
-      setStage('PDF 组装')
-      setProgress(80)
-      await new Promise((resolve) => window.setTimeout(resolve, 300))
-
-      if (!window.epiphany?.exportPdf) {
+      if (!window.epiphany?.exportPdf || !window.epiphany?.onExportProgress) {
         throw new Error('导出接口不可用')
       }
-      await window.epiphany.exportPdf(`report-${Date.now()}.pdf`)
-      setStage('完成')
-      setProgress(100)
+      const modules = REPORT_MODULE_OPTIONS.filter((option) => selectedModules[option.key]).map((option) => option.label)
+      unsubscribeProgress = window.epiphany.onExportProgress((payload) => {
+        setStage(payload.stage)
+        setProgress(payload.progress)
+      })
+      await window.epiphany.exportPdf({
+        fileName: `report-${Date.now()}.pdf`,
+        modules,
+        note: doctorNote,
+        patientId: selectedPatientId,
+        rangeDays,
+        includeSignature,
+      })
+      unsubscribeProgress()
+      unsubscribeProgress = undefined
       pushAlert({
         id: `report-success-${Date.now()}`,
         type: 'success',
@@ -54,6 +59,7 @@ export function ReportGenerator(): JSX.Element {
         setStage('')
       }, 900)
     } catch (error) {
+      unsubscribeProgress?.()
       const message = error instanceof Error ? error.message : '导出失败'
       setProgress(0)
       setStage('')
@@ -68,12 +74,31 @@ export function ReportGenerator(): JSX.Element {
   }
 
   const previewItems = REPORT_MODULE_OPTIONS.filter((option) => selectedModules[option.key]).map((option) => option.label)
+  const selectedPatientName = useMemo(() => {
+    if (selectedPatientId === 'all') return '全部患者（汇总）'
+    return patients.find((patient) => patient.id === selectedPatientId)?.name ?? '未知患者'
+  }, [patients, selectedPatientId])
 
   return (
     <div className="grid h-full grid-cols-[40%_1fr] gap-3">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报告生成器</h2>
         <div className="mt-3 space-y-3 text-sm">
+          <label className="block">
+            患者范围
+            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 p-2" value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)}>
+              <option value="all">全部患者（汇总）</option>
+              {patients.map((patient) => (
+                <option key={patient.id} value={patient.id}>
+                  {patient.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            统计区间（天）
+            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 p-2" type="number" min={1} max={90} value={rangeDays} onChange={(event) => setRangeDays(Number(event.target.value))} />
+          </label>
           {REPORT_MODULE_OPTIONS.map((option) => (
             <label key={option.key} className="flex items-center justify-between">
               {option.label}
@@ -89,6 +114,10 @@ export function ReportGenerator(): JSX.Element {
               />
             </label>
           ))}
+          <label className="flex items-center justify-between">
+            医师签名
+            <input checked={includeSignature} onChange={(event) => setIncludeSignature(event.target.checked)} type="checkbox" />
+          </label>
           <textarea
             className="h-24 w-full rounded border border-border-default bg-bg-3 p-2"
             placeholder="医生备注"
@@ -107,6 +136,12 @@ export function ReportGenerator(): JSX.Element {
           <ul className="mt-2 list-disc space-y-1 pl-5">
             {previewItems.length === 0 ? <li>未勾选导出模块</li> : previewItems.map((item) => <li key={item}>{item}</li>)}
           </ul>
+          <div className="mt-4 font-medium text-text-primary">筛选条件</div>
+          <div className="mt-1 rounded border border-border-default bg-bg-2 p-2">
+            <div>患者：{selectedPatientName}</div>
+            <div>区间：最近 {rangeDays} 天</div>
+            <div>签名：{includeSignature ? '包含' : '不包含'}</div>
+          </div>
           <div className="mt-4 font-medium text-text-primary">医生备注</div>
           <div className="mt-1 whitespace-pre-wrap rounded border border-border-default bg-bg-2 p-2">
             {doctorNote.trim() || '无'}

@@ -18,6 +18,10 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -66,9 +70,39 @@ ipcMain.handle('store:updateSettings', (_event, patch) => {
   const settings = asObject(store.get('settings', {}))
   store.set('settings', { ...settings, ...patch })
 })
-ipcMain.handle('data:listSerialPorts', () => [])
-ipcMain.handle('data:scanBleDevices', () => [])
-ipcMain.handle('report:exportPdf', async (_event, fileName) => {
+ipcMain.handle('data:listSerialPorts', () => ['COM1', 'COM3', '/dev/ttyUSB0'])
+ipcMain.handle('data:scanBleDevices', () => ['EpiBand-A1', 'EpiBand-B2'])
+ipcMain.handle('data:testConnection', async (_event, payload) => {
+  const mode = payload?.mode
+  if (mode === 'websocket') {
+    if (!payload?.websocketUrl || !/^wss?:\/\//.test(payload.websocketUrl)) {
+      return { ok: false, message: 'WebSocket 地址格式无效' }
+    }
+    return { ok: true, message: 'WebSocket 握手通过（模拟）' }
+  }
+  if (mode === 'serial') {
+    if (!payload?.serialPort) return { ok: false, message: '未选择串口' }
+    return { ok: true, message: `串口 ${payload.serialPort} 可用（模拟）` }
+  }
+  if (mode === 'ble') {
+    if (!payload?.bleDeviceId) return { ok: false, message: '未选择 BLE 设备' }
+    return { ok: true, message: `BLE ${payload.bleDeviceId} 已响应（模拟）` }
+  }
+  return { ok: true, message: 'Mock 模式无需连接测试' }
+})
+ipcMain.handle('report:exportPdf', async (event, payload) => {
+  const fileName = typeof payload?.fileName === 'string' ? payload.fileName : `report-${Date.now()}.pdf`
+  const stages = [
+    { stage: '数据收集', progress: 20 },
+    { stage: '统计汇总', progress: 45 },
+    { stage: '图表渲染', progress: 70 },
+    { stage: 'PDF 打包', progress: 92 },
+    { stage: '完成', progress: 100 },
+  ]
+  for (const item of stages) {
+    event.sender.send('report:exportProgress', item)
+    await sleep(260)
+  }
   await shell.openExternal('https://example.com')
   return { ok: true, fileName }
 })
