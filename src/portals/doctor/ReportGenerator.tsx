@@ -1,13 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useAppStore } from '../../store'
+
+const REPORT_MODULE_OPTIONS = [
+  { key: 'stats', label: '发作次数统计' },
+  { key: 'heatmap', label: '热力图截图' },
+  { key: 'summary', label: '多模态摘要' },
+] as const
+type ReportModuleKey = (typeof REPORT_MODULE_OPTIONS)[number]['key']
 
 export function ReportGenerator(): JSX.Element {
   const pushAlert = useAppStore((state) => state.pushAlert)
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
-  const [includeStats, setIncludeStats] = useState(true)
-  const [includeHeatmap, setIncludeHeatmap] = useState(true)
-  const [includeSummary, setIncludeSummary] = useState(true)
+  const [selectedModules, setSelectedModules] = useState<Record<ReportModuleKey, boolean>>({
+    stats: true,
+    heatmap: true,
+    summary: true,
+  })
   const [doctorNote, setDoctorNote] = useState('')
 
   const exporting = progress > 0 && progress < 100
@@ -27,7 +36,10 @@ export function ReportGenerator(): JSX.Element {
       setProgress(80)
       await new Promise((resolve) => window.setTimeout(resolve, 300))
 
-      await window.epiphany?.exportPdf(`report-${Date.now()}.pdf`)
+      if (!window.epiphany?.exportPdf) {
+        throw new Error('导出接口不可用')
+      }
+      await window.epiphany.exportPdf(`report-${Date.now()}.pdf`)
       setStage('完成')
       setProgress(100)
       pushAlert({
@@ -55,33 +67,28 @@ export function ReportGenerator(): JSX.Element {
     }
   }
 
-  const previewItems = useMemo(
-    () =>
-      [
-        includeStats ? '发作次数统计' : null,
-        includeHeatmap ? '热力图截图' : null,
-        includeSummary ? '多模态摘要' : null,
-      ].filter((item): item is string => Boolean(item)),
-    [includeHeatmap, includeStats, includeSummary],
-  )
+  const previewItems = REPORT_MODULE_OPTIONS.filter((option) => selectedModules[option.key]).map((option) => option.label)
 
   return (
     <div className="grid h-full grid-cols-[40%_1fr] gap-3">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="font-semibold">报告生成器</h2>
         <div className="mt-3 space-y-3 text-sm">
-          <label className="flex items-center justify-between">
-            发作次数统计
-            <input checked={includeStats} onChange={(event) => setIncludeStats(event.target.checked)} type="checkbox" />
-          </label>
-          <label className="flex items-center justify-between">
-            热力图截图
-            <input checked={includeHeatmap} onChange={(event) => setIncludeHeatmap(event.target.checked)} type="checkbox" />
-          </label>
-          <label className="flex items-center justify-between">
-            多模态摘要
-            <input checked={includeSummary} onChange={(event) => setIncludeSummary(event.target.checked)} type="checkbox" />
-          </label>
+          {REPORT_MODULE_OPTIONS.map((option) => (
+            <label key={option.key} className="flex items-center justify-between">
+              {option.label}
+              <input
+                checked={selectedModules[option.key]}
+                onChange={(event) =>
+                  setSelectedModules((prev) => ({
+                    ...prev,
+                    [option.key]: event.target.checked,
+                  }))
+                }
+                type="checkbox"
+              />
+            </label>
+          ))}
           <textarea
             className="h-24 w-full rounded border border-border-default bg-bg-3 p-2"
             placeholder="医生备注"

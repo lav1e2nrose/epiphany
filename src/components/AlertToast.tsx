@@ -31,9 +31,10 @@ export function AlertToast(): JSX.Element {
   }, [alerts, dismiss])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 100)
+    if (!alerts.some((alert) => !alert.sticky)) return
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [alerts])
 
   const visibleAlerts = useMemo(() => alerts.slice(-3), [alerts])
 
@@ -58,7 +59,7 @@ export function AlertToast(): JSX.Element {
             {!alert.sticky && (
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-bg-3">
                 <div
-                  className={`h-full transition-[width] duration-100 ${progressClass(alert.type)}`}
+                  className={`h-full transition-[width] duration-300 ${progressClass(alert.type)}`}
                   style={{ width: `${Math.max(0, 100 - ((now - alert.timestamp) / TOAST_LIFETIME) * 100)}%` }}
                 />
               </div>
