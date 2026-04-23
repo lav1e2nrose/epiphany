@@ -23,6 +23,8 @@ function asObject(value) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+// 模拟报告分阶段构建节奏，便于前端呈现平滑进度动画。
+const EXPORT_STAGE_DELAY_MS = 260
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -113,7 +115,7 @@ ipcMain.handle('data:testConnection', async (_event, payload) => {
 })
 ipcMain.handle('report:exportPdf', async (event, payload) => {
   const rawName = typeof payload?.fileName === 'string' ? payload.fileName : `report-${Date.now()}.pdf`
-  const fileName = rawName.endsWith('.pdf') ? rawName : `${rawName}.pdf`
+  const fileName = rawName.toLowerCase().endsWith('.pdf') ? rawName : `${rawName}.pdf`
   const filePath = path.join(app.getPath('documents'), fileName)
   const stages = [
     { stage: '数据收集', progress: 20 },
@@ -124,7 +126,7 @@ ipcMain.handle('report:exportPdf', async (event, payload) => {
   ]
   for (const item of stages) {
     event.sender.send('report:exportProgress', item)
-    await sleep(260)
+    await sleep(EXPORT_STAGE_DELAY_MS)
   }
   const sections = Array.isArray(payload?.modules) ? payload.modules.join(' / ') : '无'
   const html = `
@@ -181,11 +183,9 @@ ipcMain.handle('system:checkForUpdates', () => ({
   message: `当前已是最新版本（v${app.getVersion()}）`,
 }))
 ipcMain.handle('system:clearLocalCache', async () => {
-  const keys = ['events', 'settings']
-  keys.forEach((key) => store.delete(key))
   store.set('events', [])
   store.set('settings', {})
-  return { ok: true, message: '本地缓存已清除' }
+  return { ok: true, message: '本地缓存已清除（包含事件日志与设置）' }
 })
 ipcMain.handle('system:exportDiagnosticLog', async () => {
   const filePath = path.join(app.getPath('documents'), `epiphany-diagnostic-${Date.now()}.json`)

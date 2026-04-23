@@ -202,7 +202,7 @@ export function SettingsPage(): JSX.Element {
                   setStatus(result.message)
                   setStatusTone(result.ok ? 'ok' : 'warn')
                 } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '检查更新失败')
+                  setStatus(error instanceof Error ? error.message : '检查更新失败，请检查网络连接或稍后重试')
                   setStatusTone('warn')
                 } finally {
                   setSystemBusy('none')
@@ -224,7 +224,7 @@ export function SettingsPage(): JSX.Element {
                   setStatus(result.message)
                   setStatusTone(result.ok ? 'ok' : 'warn')
                 } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '清除缓存失败')
+                  setStatus(error instanceof Error ? error.message : '清除缓存失败，请重试或联系技术支持')
                   setStatusTone('warn')
                 } finally {
                   setSystemBusy('none')
@@ -246,7 +246,7 @@ export function SettingsPage(): JSX.Element {
                   setStatus(result.filePath ? `${result.message}：${result.filePath}` : result.message)
                   setStatusTone(result.ok ? 'ok' : 'warn')
                 } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '导出诊断日志失败')
+                  setStatus(error instanceof Error ? error.message : '导出诊断日志失败，请确认磁盘空间后重试')
                   setStatusTone('warn')
                 } finally {
                   setSystemBusy('none')

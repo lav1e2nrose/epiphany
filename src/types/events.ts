@@ -12,8 +12,10 @@ export interface SeizureEvent {
   durationSec?: number
   riskState?: RiskState
   details?: string
-  handlingStatus?: HandlingStatus
+  handlingStatus: HandlingStatus
+  /** 关联的告警 ID（用于将事件与告警队列统一追踪） */
   linkedAlertId?: string
+  /** 用户对预警结果的反馈（命中 / 误报） */
   feedbackResult?: FeedbackResult
 }
 

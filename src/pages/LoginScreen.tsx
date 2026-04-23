@@ -10,6 +10,7 @@ const cards: Array<{ role: Portal; title: string; subtitle: string }> = [
   { role: 'guardian', title: '👨‍👩‍👧 监护人', subtitle: '家庭守护与远程监控' },
   { role: 'doctor', title: '🩺 医生', subtitle: '临床管理与数据分析' },
 ]
+const SHAKE_DURATION_MS = 300
 
 export function LoginScreen(): JSX.Element {
   const login = useAppStore((state) => state.login)
@@ -25,7 +26,7 @@ export function LoginScreen(): JSX.Element {
     if (!role || username !== 'demo' || password !== 'demo123') {
       setError(true)
       setErrorText(!role ? '请先选择身份后再登录。' : '账号或密码错误，请重试。')
-      window.setTimeout(() => setError(false), 320)
+      window.setTimeout(() => setError(false), SHAKE_DURATION_MS)
       return
     }
     setError(false)

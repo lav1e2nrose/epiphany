@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Alert, SeizureEvent } from '../types/events'
+import type { Alert, HandlingStatus, SeizureEvent } from '../types/events'
 import type { AppSettings, Patient, Portal, User } from '../types/user'
 import type { ConnectionStatus, IDataSource } from '../data/IDataSource'
 import type { ProcessedFrame, RiskState } from '../types/signal'
@@ -37,6 +37,12 @@ const demoPatients: Patient[] = [
   { id: 'p8', name: '周宁', age: 52, weeklySeizures: 6, lastSeizure: '4h前', riskLevel: 'seizure', adherence: 71 },
 ]
 
+function normalizeEvent(event: SeizureEvent): SeizureEvent {
+  if (event.handlingStatus) return event
+  const handlingStatus: HandlingStatus = event.type === 'alert' || event.type === 'sos' ? 'pending' : 'resolved'
+  return { ...event, handlingStatus }
+}
+
 export interface AppStore {
   dataSource: IDataSource
   connectionStatus: ConnectionStatus
@@ -53,7 +59,7 @@ export interface AppStore {
 
   events: SeizureEvent[]
   addEvent: (event: SeizureEvent) => void
-  updateEventHandling: (eventId: string, handlingStatus: SeizureEvent['handlingStatus']) => void
+  updateEventHandling: (eventId: string, handlingStatus: HandlingStatus) => void
 
   currentUser: User | null
   currentPortal: Portal
@@ -113,16 +119,15 @@ export const useAppStore = create<AppStore>((set) => ({
 
   events: [],
   addEvent: (event) => {
-    set((state) => ({ events: [event, ...state.events].slice(0, 300) }))
-    void window.epiphany?.addEvent(event)
+    const normalizedEvent = normalizeEvent(event)
+    set((state) => ({ events: [normalizedEvent, ...state.events].slice(0, 300) }))
+    void window.epiphany?.addEvent(normalizedEvent)
   },
   updateEventHandling: (eventId, handlingStatus) => {
     set((state) => ({
       events: state.events.map((event) => (event.id === eventId ? { ...event, handlingStatus } : event)),
     }))
-    if (handlingStatus) {
-      void window.epiphany?.updateEventHandling(eventId, handlingStatus)
-    }
+    void window.epiphany?.updateEventHandling(eventId, handlingStatus)
   },
 
   currentUser: null,
@@ -154,11 +159,11 @@ export const useAppStore = create<AppStore>((set) => ({
   hydratePersistedState: (persisted) =>
     set((state) => {
       const nextSettings = { ...state.settings, ...(persisted.settings ?? {}) }
-      return {
-        events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300) : state.events,
-        settings: nextSettings,
-        dataSource: createDataSource(nextSettings.dataSourceMode),
-      }
+        return {
+          events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300).map(normalizeEvent) : state.events,
+          settings: nextSettings,
+          dataSource: createDataSource(nextSettings.dataSourceMode),
+        }
     }),
 
   reviewFocusTimestamp: null,
