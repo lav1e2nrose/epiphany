@@ -5,6 +5,7 @@ export function AlertSystem(): JSX.Element {
   const events = useAppStore((state) => state.events)
   const dismissAlert = useAppStore((state) => state.dismissAlert)
   const pushAlert = useAppStore((state) => state.pushAlert)
+  const addEvent = useAppStore((state) => state.addEvent)
   const settings = useAppStore((state) => state.settings)
 
   return (
@@ -18,8 +19,30 @@ export function AlertSystem(): JSX.Element {
           <div className="text-xs text-text-muted">以上策略可在 Settings 页面统一配置</div>
         </div>
         <div className="mt-4 flex gap-2 text-xs">
-          <button className="rounded border border-border-default px-2 py-1" onClick={() => pushAlert({ id: `${Date.now()}-warn`, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: Date.now() })}>触发黄色报警测试</button>
-          <button className="rounded border border-danger/70 px-2 py-1 text-danger" onClick={() => pushAlert({ id: `${Date.now()}-danger`, type: 'error', title: '红色报警测试', message: '监测到发作事件，建议立即处理', timestamp: Date.now(), sticky: true })}>触发红色报警测试</button>
+          <button
+            className="rounded border border-border-default px-2 py-1"
+            onClick={() => {
+              const now = Date.now()
+              const alertId = `${now}-warn`
+              const eventId = `${now}-warn-event`
+              pushAlert({ id: alertId, type: 'warning', title: '黄色报警测试', message: '监测到预警信号', timestamp: now, handlingStatus: 'pending', linkedEventId: eventId })
+              addEvent({ id: eventId, type: 'alert', title: '监护人端黄色报警测试', timestamp: now, riskState: 'warning', handlingStatus: 'pending', linkedAlertId: alertId })
+            }}
+          >
+            触发黄色报警测试
+          </button>
+          <button
+            className="rounded border border-danger/70 px-2 py-1 text-danger"
+            onClick={() => {
+              const now = Date.now()
+              const alertId = `${now}-danger`
+              const eventId = `${now}-danger-event`
+              pushAlert({ id: alertId, type: 'error', title: '红色报警测试', message: '监测到发作事件，建议立即处理', timestamp: now, sticky: true, handlingStatus: 'pending', linkedEventId: eventId, riskState: 'seizure' })
+              addEvent({ id: eventId, type: 'alert', title: '监护人端红色报警测试', timestamp: now, riskState: 'seizure', handlingStatus: 'pending', linkedAlertId: alertId })
+            }}
+          >
+            触发红色报警测试
+          </button>
         </div>
       </section>
       <section className="rounded-md border border-border-default bg-bg-2 p-4">

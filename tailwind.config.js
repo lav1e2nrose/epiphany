@@ -14,6 +14,7 @@ export default {
         'text-primary': 'var(--text-primary)',
         'text-secondary': 'var(--text-secondary)',
         'text-muted': 'var(--text-muted)',
+        info: 'var(--info)',
         safe: 'var(--safe)',
         warn: 'var(--warn)',
         danger: 'var(--danger)',

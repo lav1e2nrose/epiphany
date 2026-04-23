@@ -8,6 +8,7 @@ const store = new Store({
   name: 'epiphany-storage',
   defaults: {
     events: [],
+    alerts: [],
     settings: {},
   },
 })
@@ -64,11 +65,17 @@ ipcMain.handle('store:getEvents', () => asArray(store.get('events', [])))
 ipcMain.handle('store:getSettings', () => asObject(store.get('settings', {})))
 ipcMain.handle('store:getPersistedState', () => ({
   events: asArray(store.get('events', [])),
+  alerts: asArray(store.get('alerts', [])),
   settings: asObject(store.get('settings', {})),
 }))
 ipcMain.handle('store:addEvent', (_event, payload) => {
   const events = asArray(store.get('events', []))
   store.set('events', [...events, payload])
+})
+ipcMain.handle('store:addAlert', (_event, payload) => {
+  const alerts = asArray(store.get('alerts', []))
+  const nextAlerts = [...alerts.filter((item) => item?.id !== payload?.id), payload].slice(-100)
+  store.set('alerts', nextAlerts)
 })
 ipcMain.handle('store:updateEventHandling', (_event, payload) => {
   const eventId = typeof payload?.eventId === 'string' ? payload.eventId : ''
@@ -78,6 +85,24 @@ ipcMain.handle('store:updateEventHandling', (_event, payload) => {
   store.set(
     'events',
     events.map((item) => (item?.id === eventId ? { ...item, handlingStatus } : item)),
+  )
+})
+ipcMain.handle('store:updateAlertHandling', (_event, payload) => {
+  const alertId = typeof payload?.alertId === 'string' ? payload.alertId : ''
+  const handlingStatus = typeof payload?.handlingStatus === 'string' ? payload.handlingStatus : ''
+  if (!alertId || !handlingStatus) return
+  const alerts = asArray(store.get('alerts', []))
+  store.set(
+    'alerts',
+    alerts.map((item) => (item?.id === alertId ? { ...item, handlingStatus, handledAt: Date.now() } : item)),
+  )
+})
+ipcMain.handle('store:dismissAlert', (_event, alertId) => {
+  if (typeof alertId !== 'string' || alertId.length === 0) return
+  const alerts = asArray(store.get('alerts', []))
+  store.set(
+    'alerts',
+    alerts.filter((item) => item?.id !== alertId),
   )
 })
 ipcMain.handle('store:updateSettings', (_event, patch) => {
@@ -115,13 +140,14 @@ ipcMain.handle('data:testConnection', async (_event, payload) => {
 })
 ipcMain.handle('report:exportPdf', async (event, payload) => {
   const rawName = typeof payload?.fileName === 'string' ? payload.fileName : `report-${Date.now()}.pdf`
-  const fileName = rawName.toLowerCase().endsWith('.pdf') ? rawName : `${rawName}.pdf`
+  const sanitizedName = path.basename(rawName).replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim()
+  const safeBaseName = sanitizedName.length > 0 ? sanitizedName : `report-${Date.now()}`
+  const fileName = safeBaseName.toLowerCase().endsWith('.pdf') ? safeBaseName : `${safeBaseName}.pdf`
   const filePath = path.join(app.getPath('documents'), fileName)
   const stages = [
     { stage: '数据收集', progress: 20 },
-    { stage: '统计汇总', progress: 45 },
-    { stage: '图表渲染', progress: 70 },
-    { stage: 'PDF 打包', progress: 92 },
+    { stage: '图表渲染', progress: 40 },
+    { stage: 'PDF 组装', progress: 80 },
     { stage: '完成', progress: 100 },
   ]
   for (const item of stages) {
@@ -184,8 +210,9 @@ ipcMain.handle('system:checkForUpdates', () => ({
 }))
 ipcMain.handle('system:clearLocalCache', async () => {
   store.set('events', [])
+  store.set('alerts', [])
   store.set('settings', {})
-  return { ok: true, message: '本地缓存已清除（包含事件日志与设置）' }
+  return { ok: true, message: '本地缓存已清除（包含事件日志、告警队列与设置）' }
 })
 ipcMain.handle('system:exportDiagnosticLog', async () => {
   const filePath = path.join(app.getPath('documents'), `epiphany-diagnostic-${Date.now()}.json`)
@@ -196,6 +223,7 @@ ipcMain.handle('system:exportDiagnosticLog', async () => {
     release: os.release(),
     persisted: {
       events: asArray(store.get('events', [])),
+      alerts: asArray(store.get('alerts', [])),
       settings: asObject(store.get('settings', {})),
     },
   }

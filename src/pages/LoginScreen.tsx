@@ -20,18 +20,22 @@ export function LoginScreen(): JSX.Element {
   const [error, setError] = useState(false)
   const [errorText, setErrorText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [phaseText, setPhaseText] = useState('请选择身份并完成登录')
 
   const handleLogin = (): void => {
     if (submitting) return
     if (!role || username !== 'demo' || password !== 'demo123') {
       setError(true)
       setErrorText(!role ? '请先选择身份后再登录。' : '账号或密码错误，请重试。')
+      setPhaseText('登录失败，请检查身份与凭证')
       window.setTimeout(() => setError(false), SHAKE_DURATION_MS)
       return
     }
     setError(false)
     setErrorText('')
+    setPhaseText('正在验证身份...')
     setSubmitting(true)
+    window.setTimeout(() => setPhaseText('正在进入工作台...'), 220)
     window.setTimeout(() => login({ id: 'demo', name: 'Demo User', role }), 500)
   }
 
@@ -45,6 +49,7 @@ export function LoginScreen(): JSX.Element {
             <Brain className="text-accent" /> 灵犀妙探
           </div>
           <p className="mt-2 text-text-secondary">智能癫痫全周期监测平台</p>
+          <p className={`mt-1 text-xs ${errorText ? 'text-danger' : 'text-text-muted'}`}>{phaseText}</p>
         </motion.div>
 
         <motion.div className="grid grid-cols-3 gap-4" animate={submitting ? { y: -80, opacity: 0 } : { y: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
@@ -73,9 +78,50 @@ export function LoginScreen(): JSX.Element {
               className="mx-auto mt-5 max-w-md overflow-hidden"
             >
               <div className={`rounded-md border border-border-default bg-bg-2 p-4 ${error ? 'animate-shake' : ''}`}>
-                <input className="mb-2 w-full rounded border border-border-default bg-bg-3 px-3 py-2" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="账号" />
-                <input className="mb-2 w-full rounded border border-border-default bg-bg-3 px-3 py-2" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="密码" />
-                {errorText && <div className="mb-2 text-xs text-danger">{errorText}</div>}
+                <input
+                  className={`mb-2 w-full rounded border bg-bg-3 px-3 py-2 ${errorText ? 'border-danger/70' : 'border-border-default'}`}
+                  value={username}
+                  onChange={(event) => {
+                    setUsername(event.target.value)
+                    if (errorText) {
+                      setErrorText('')
+                      setPhaseText('请输入凭证并登录')
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') handleLogin()
+                  }}
+                  placeholder="账号"
+                />
+                <input
+                  className={`mb-2 w-full rounded border bg-bg-3 px-3 py-2 ${errorText ? 'border-danger/70' : 'border-border-default'}`}
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    if (errorText) {
+                      setErrorText('')
+                      setPhaseText('请输入凭证并登录')
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') handleLogin()
+                  }}
+                  type="password"
+                  placeholder="密码"
+                />
+                <AnimatePresence>
+                  {errorText && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={MOTION_TRANSITION_FAST}
+                      className="mb-2 text-xs text-danger"
+                    >
+                      {errorText}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <button className="w-full rounded-md bg-accent px-3 py-2" onClick={handleLogin} disabled={submitting}>
                   {submitting ? '登录中...' : '登录'}
                 </button>

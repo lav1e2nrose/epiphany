@@ -13,6 +13,7 @@
   --text-primary: #E6EDF3;
   --text-secondary: #8B949E;
   --text-muted: #484F58;
+  --info: #58A6FF;
   --safe: #2EA043;
   --safe-glow: rgba(46, 160, 67, 0.4);
   --warn: #D29922;
@@ -38,6 +39,10 @@
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  --radius-default: 6px;
+  --radius-modal: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -58,13 +63,16 @@ body,
 button,
 input,
 textarea,
-select {
+select,
+[role='button'] {
   color: inherit;
   font: inherit;
+  transition: all 150ms ease;
+  border-radius: var(--radius-default);
 }
 
 button {
-  transition: all 150ms ease;
+  box-shadow: var(--shadow-card);
 }
 
 button:hover:not(:disabled),

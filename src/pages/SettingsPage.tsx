@@ -13,6 +13,7 @@ export function SettingsPage(): JSX.Element {
   const [serialPorts, setSerialPorts] = useState<string[]>([])
   const [bleDevices, setBleDevices] = useState<string[]>([])
   const [systemBusy, setSystemBusy] = useState<'none' | 'update' | 'clear' | 'diag'>('none')
+  const [lastDiagnosticPath, setLastDiagnosticPath] = useState('')
 
   const testConnection = async (): Promise<void> => {
     setLoading(true)
@@ -188,14 +189,19 @@ export function SettingsPage(): JSX.Element {
       </section>
 
       <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm text-text-secondary">
-        <div>应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1</div>
+        <h2 className="font-semibold text-text-primary">系统信息</h2>
+        <div className="mt-2">应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1</div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <button
             className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
             disabled={systemBusy !== 'none'}
             onClick={() =>
               void (async () => {
-                if (!window.epiphany?.checkForUpdates) return
+                if (!window.epiphany?.checkForUpdates) {
+                  setStatus('检查更新接口不可用（当前为浏览器模式）')
+                  setStatusTone('warn')
+                  return
+                }
                 setSystemBusy('update')
                 try {
                   const result = await window.epiphany.checkForUpdates()
@@ -217,7 +223,11 @@ export function SettingsPage(): JSX.Element {
             disabled={systemBusy !== 'none'}
             onClick={() =>
               void (async () => {
-                if (!window.epiphany?.clearLocalCache) return
+                if (!window.epiphany?.clearLocalCache) {
+                  setStatus('清除缓存接口不可用（当前为浏览器模式）')
+                  setStatusTone('warn')
+                  return
+                }
                 setSystemBusy('clear')
                 try {
                   const result = await window.epiphany.clearLocalCache()
@@ -239,10 +249,15 @@ export function SettingsPage(): JSX.Element {
             disabled={systemBusy !== 'none'}
             onClick={() =>
               void (async () => {
-                if (!window.epiphany?.exportDiagnosticLog) return
+                if (!window.epiphany?.exportDiagnosticLog) {
+                  setStatus('导出诊断日志接口不可用（当前为浏览器模式）')
+                  setStatusTone('warn')
+                  return
+                }
                 setSystemBusy('diag')
                 try {
                   const result = await window.epiphany.exportDiagnosticLog()
+                  setLastDiagnosticPath(result.filePath ?? '')
                   setStatus(result.filePath ? `${result.message}：${result.filePath}` : result.message)
                   setStatusTone(result.ok ? 'ok' : 'warn')
                 } catch (error) {
@@ -256,6 +271,14 @@ export function SettingsPage(): JSX.Element {
           >
             {systemBusy === 'diag' ? '导出中...' : '导出诊断日志'}
           </button>
+          {lastDiagnosticPath && (
+            <button
+              className="rounded border border-border-default px-3 py-1"
+              onClick={() => void window.epiphany?.showItemInFolder?.(lastDiagnosticPath)}
+            >
+              定位诊断日志文件
+            </button>
+          )}
         </div>
       </section>
     </div>

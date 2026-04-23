@@ -43,6 +43,12 @@ function normalizeEvent(event: SeizureEvent): SeizureEvent {
   return { ...event, handlingStatus }
 }
 
+function normalizeAlert(alert: Alert): Alert {
+  if (alert.handlingStatus) return alert
+  const handlingStatus: HandlingStatus = alert.type === 'warning' || alert.type === 'error' || alert.type === 'sos' ? 'pending' : 'resolved'
+  return { ...alert, handlingStatus }
+}
+
 export interface AppStore {
   dataSource: IDataSource
   connectionStatus: ConnectionStatus
@@ -71,13 +77,14 @@ export interface AppStore {
 
   alerts: Alert[]
   pushAlert: (alert: Alert) => void
+  updateAlertHandling: (alertId: string, handlingStatus: HandlingStatus) => void
   dismissAlert: (id: string) => void
 
   patients: Patient[]
 
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
-  hydratePersistedState: (persisted: { events?: SeizureEvent[]; settings?: Partial<AppSettings> }) => void
+  hydratePersistedState: (persisted: { events?: SeizureEvent[]; alerts?: Alert[]; settings?: Partial<AppSettings> }) => void
 
   reviewFocusTimestamp: number | null
   setReviewFocusTimestamp: (timestamp: number | null) => void
@@ -124,10 +131,25 @@ export const useAppStore = create<AppStore>((set) => ({
     void window.epiphany?.addEvent(normalizedEvent)
   },
   updateEventHandling: (eventId, handlingStatus) => {
-    set((state) => ({
-      events: state.events.map((event) => (event.id === eventId ? { ...event, handlingStatus } : event)),
-    }))
+    let linkedAlertId: string | undefined
+    set((state) => {
+      const nextEvents = state.events.map((event) =>
+        event.id === eventId ? { ...event, handlingStatus, handledAt: Date.now() } : event,
+      )
+      linkedAlertId = nextEvents.find((event) => event.id === eventId)?.linkedAlertId
+      return {
+        events: nextEvents,
+        alerts: linkedAlertId
+          ? state.alerts.map((alert) =>
+              alert.id === linkedAlertId ? { ...alert, handlingStatus, handledAt: Date.now() } : alert,
+            )
+          : state.alerts,
+      }
+    })
     void window.epiphany?.updateEventHandling(eventId, handlingStatus)
+    if (linkedAlertId) {
+      void window.epiphany?.updateAlertHandling(linkedAlertId, handlingStatus)
+    }
   },
 
   currentUser: null,
@@ -141,13 +163,22 @@ export const useAppStore = create<AppStore>((set) => ({
   alerts: [],
   pushAlert: (alert) =>
     set((state) => {
-      const nextAlert: Alert = {
-        ...alert,
-        handlingStatus: alert.handlingStatus ?? 'pending',
+      const nextAlert = normalizeAlert(alert)
+      void window.epiphany?.addAlert(nextAlert)
+      return {
+        alerts: [...state.alerts.filter((item) => item.id !== nextAlert.id), nextAlert].slice(-10),
       }
-      return { alerts: [...state.alerts, nextAlert].slice(-10) }
     }),
-  dismissAlert: (id) => set((state) => ({ alerts: state.alerts.filter((alert) => alert.id !== id) })),
+  updateAlertHandling: (alertId, handlingStatus) => {
+    set((state) => ({
+      alerts: state.alerts.map((alert) => (alert.id === alertId ? { ...alert, handlingStatus, handledAt: Date.now() } : alert)),
+    }))
+    void window.epiphany?.updateAlertHandling(alertId, handlingStatus)
+  },
+  dismissAlert: (id) => {
+    set((state) => ({ alerts: state.alerts.filter((alert) => alert.id !== id) }))
+    void window.epiphany?.dismissAlert(id)
+  },
 
   patients: demoPatients,
 
@@ -159,11 +190,12 @@ export const useAppStore = create<AppStore>((set) => ({
   hydratePersistedState: (persisted) =>
     set((state) => {
       const nextSettings = { ...state.settings, ...(persisted.settings ?? {}) }
-        return {
-          events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300).map(normalizeEvent) : state.events,
-          settings: nextSettings,
-          dataSource: createDataSource(nextSettings.dataSourceMode),
-        }
+      return {
+        events: Array.isArray(persisted.events) ? persisted.events.slice(0, 300).map(normalizeEvent) : state.events,
+        alerts: Array.isArray(persisted.alerts) ? persisted.alerts.slice(-10).map(normalizeAlert) : state.alerts,
+        settings: nextSettings,
+        dataSource: createDataSource(nextSettings.dataSourceMode),
+      }
     }),
 
   reviewFocusTimestamp: null,
