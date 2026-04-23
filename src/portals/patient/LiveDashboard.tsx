@@ -17,6 +17,21 @@ function toRiskState(score: number): RiskState {
   return 'safe'
 }
 
+function transitionRiskState(prev: RiskState, score: number, sensitivity: number): RiskState {
+  const delta = (sensitivity - 0.5) * 24
+  const seizureEnter = 85 - delta
+  const warningEnter = 60 - delta
+  const recoveryEnter = 40 - delta
+  const seizureExit = seizureEnter - 12
+  const warningExit = warningEnter - 10
+  const recoveryExit = recoveryEnter - 8
+
+  if (prev === 'seizure') return score >= seizureExit ? 'seizure' : score >= warningExit ? 'warning' : 'recovery'
+  if (prev === 'warning') return score >= seizureEnter ? 'seizure' : score >= warningExit ? 'warning' : 'recovery'
+  if (prev === 'recovery') return score >= warningEnter ? 'warning' : score >= recoveryExit ? 'recovery' : 'safe'
+  return toRiskState(score - delta)
+}
+
 export function LiveDashboard(): JSX.Element {
   const dataSource = useAppStore((state) => state.dataSource)
   const settings = useAppStore((state) => state.settings)
@@ -37,6 +52,8 @@ export function LiveDashboard(): JSX.Element {
   const addEvent = useAppStore((state) => state.addEvent)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
   const historyRef = useRef<ProcessedFrame[]>(frameBuffer)
+  const riskRef = useRef<RiskState>('safe')
+  const lastAlertTsRef = useRef(0)
 
   useEffect(
     () =>
@@ -63,14 +80,37 @@ export function LiveDashboard(): JSX.Element {
       const features = processor.extractFeatures(windowed)
       const artifacts = processor.detectArtifacts(filteredFrame)
       const score = processor.computeRiskScore(features, historyRef.current)
+      const stableRiskState = transitionRiskState(riskRef.current, score, settings.sensitivity)
+      riskRef.current = stableRiskState
       const processed: ProcessedFrame = {
         ...filteredFrame,
         features,
         artifacts,
         riskScore: score,
-        riskState: toRiskState(score),
+        riskState: stableRiskState,
       }
       pushFrame(processed)
+
+      if (stableRiskState === 'warning' || stableRiskState === 'seizure') {
+        const now = Date.now()
+        if (now - lastAlertTsRef.current > 12000) {
+          lastAlertTsRef.current = now
+          pushAlert({
+            id: `${now}-${stableRiskState}`,
+            type: stableRiskState === 'seizure' ? 'error' : 'warning',
+            title: stableRiskState === 'seizure' ? '发作高风险告警' : '监测到预警信号',
+            message: `当前风险分 ${Math.round(score)}`,
+            timestamp: now,
+          })
+          addEvent({
+            id: `${now}-alert-event`,
+            type: 'alert',
+            title: stableRiskState === 'seizure' ? '高风险发作告警' : '发作预警',
+            timestamp: now,
+            riskState: stableRiskState,
+          })
+        }
+      }
     })
     const unsubscribeStatus = dataSource.onStatusChange(setConnectionStatus)
     const unsubscribeError = dataSource.onError(() => setConnectionStatus('error'))
@@ -82,6 +122,14 @@ export function LiveDashboard(): JSX.Element {
       config.baudRate = baudRate
     }
     if (dataSourceMode === 'ble' && bleDeviceId) config.deviceId = bleDeviceId
+    if (dataSourceMode === 'mock') {
+      config.sampleIntervalMs = 16
+      config.preictalSec = Math.max(4, settings.warningLeadMinutes * 0.6)
+      config.seizureSec = 5
+      config.recoverySec = 8
+      config.cycleMinSec = 36
+      config.cycleMaxSec = 64
+    }
 
     setConnectionStatus('connecting')
     void dataSource.connect(config).catch(() => setConnectionStatus('error'))
@@ -92,19 +140,23 @@ export function LiveDashboard(): JSX.Element {
       unsubscribeError()
       void dataSource.disconnect()
     }
-  }, [bandpassHigh, bandpassLow, baudRate, bleDeviceId, dataSource, dataSourceMode, notchHz, pushFrame, serialPort, setConnectionStatus, websocketUrl])
-
-  useEffect(() => {
-    if (riskState === 'warning' || riskState === 'seizure') {
-      pushAlert({
-        id: `${Date.now()}`,
-        type: riskState === 'seizure' ? 'error' : 'warning',
-        title: '监测到异常脑电特征',
-        message: `当前风险分 ${Math.round(riskScore)}`,
-        timestamp: Date.now(),
-      })
-    }
-  }, [pushAlert, riskScore, riskState])
+  }, [
+    addEvent,
+    bandpassHigh,
+    bandpassLow,
+    baudRate,
+    bleDeviceId,
+    dataSource,
+    dataSourceMode,
+    notchHz,
+    pushAlert,
+    pushFrame,
+    serialPort,
+    setConnectionStatus,
+    settings.sensitivity,
+    settings.warningLeadMinutes,
+    websocketUrl,
+  ])
 
   const latest = frameBuffer.at(-1)
   const hasMovementArtifact = Boolean(latest?.artifacts.includes('movement'))
