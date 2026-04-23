@@ -26,6 +26,15 @@
   --emg-color: #F0883E;
   --accent: #0A84FF;
   --accent-dim: rgba(10, 132, 255, 0.15);
+  --heat-0: #161B22;
+  --heat-1: #0E4429;
+  --heat-2: #006D32;
+  --heat-3: #26A641;
+  --heat-4: #39D353;
+  --heat-s1: #3D1A1A;
+  --heat-s2: #7A2020;
+  --heat-s3: #C0392B;
+  --heat-s4: #F85149;
   --font-display: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -56,6 +65,26 @@ select {
 
 button {
   transition: all 150ms ease;
+}
+
+button:hover:not(:disabled),
+input:hover:not(:disabled),
+textarea:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--border-emphasis);
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 button:active {

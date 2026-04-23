@@ -22,6 +22,7 @@ export function ReportGenerator(): JSX.Element {
     summary: true,
   })
   const [doctorNote, setDoctorNote] = useState('')
+  const [lastExportPath, setLastExportPath] = useState('')
 
   const exporting = progress > 0 && progress < 100
 
@@ -37,7 +38,7 @@ export function ReportGenerator(): JSX.Element {
         setStage(payload.stage)
         setProgress(payload.progress)
       })
-      await window.epiphany.exportPdf({
+      const result = await window.epiphany.exportPdf({
         fileName: `report-${Date.now()}.pdf`,
         modules,
         note: doctorNote,
@@ -47,11 +48,12 @@ export function ReportGenerator(): JSX.Element {
       })
       unsubscribeProgress()
       unsubscribeProgress = undefined
+      setLastExportPath(result.filePath)
       pushAlert({
         id: `report-success-${Date.now()}`,
         type: 'success',
         title: '导出成功',
-        message: '报告已生成并导出。',
+        message: `报告已生成：${result.filePath}`,
         timestamp: Date.now(),
       })
       window.setTimeout(() => {
@@ -153,6 +155,17 @@ export function ReportGenerator(): JSX.Element {
             <div className="mt-1 h-2 rounded-full bg-bg-3">
               <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
             </div>
+          </div>
+        )}
+        {lastExportPath && (
+          <div className="mt-3 rounded border border-safe/40 bg-safe/10 p-2 text-xs text-safe">
+            <div>已导出到：{lastExportPath}</div>
+            <button
+              className="mt-2 rounded border border-safe/60 px-2 py-1"
+              onClick={() => void window.epiphany?.showItemInFolder?.(lastExportPath)}
+            >
+              在资源管理器中显示
+            </button>
           </div>
         )}
       </section>

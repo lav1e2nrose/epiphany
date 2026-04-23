@@ -1,6 +1,8 @@
 import type { RiskState } from './signal'
 
 export type EventType = 'system' | 'medication' | 'manual' | 'alert' | 'feedback' | 'sos'
+export type HandlingStatus = 'pending' | 'acknowledged' | 'resolved'
+export type FeedbackResult = 'true_positive' | 'false_positive'
 
 export interface SeizureEvent {
   id: string
@@ -10,7 +12,11 @@ export interface SeizureEvent {
   durationSec?: number
   riskState?: RiskState
   details?: string
-  resolved?: boolean
+  handlingStatus: HandlingStatus
+  /** 关联的告警 ID（用于将事件与告警队列统一追踪） */
+  linkedAlertId?: string
+  /** 用户对预警结果的反馈（命中 / 误报） */
+  feedbackResult?: FeedbackResult
 }
 
 export interface Alert {
@@ -20,4 +26,7 @@ export interface Alert {
   message: string
   timestamp: number
   sticky?: boolean
+  handlingStatus?: HandlingStatus
+  linkedEventId?: string
+  riskState?: RiskState
 }

@@ -35,6 +35,7 @@ export function LifeLog(): JSX.Element {
                 title: '生活日志已保存',
                 timestamp: Date.now(),
                 details: `睡眠 ${sleepHours.toFixed(1)}h / 压力 ${stress}`,
+                handlingStatus: 'resolved',
               })
             }
           >
