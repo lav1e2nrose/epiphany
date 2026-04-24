@@ -246,13 +246,76 @@ export function ReportGenerator(): JSX.Element {
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
         <h3 className="font-semibold">预览区</h3>
         <div className="mt-3 h-[80%] overflow-auto rounded border border-border-subtle bg-bg-3 p-4 text-sm text-text-secondary">
-          <div className="mx-auto w-full max-w-[720px] rounded-md border border-border-default bg-bg-1 p-4">
-            {reportSections.map((section) => (
-              <motion.div key={section.key} animate={{ opacity: section.enabled ? 1 : 0.35 }} transition={{ duration: 0.2 }} className="mb-3 rounded border border-border-subtle bg-bg-2 p-3">
-                <div className="font-medium text-text-primary">{section.title}</div>
-                <div className="mt-1 whitespace-pre-wrap text-xs">{section.content}</div>
+          <div className="mx-auto w-full max-w-[720px] space-y-0 rounded border border-border-default bg-white/5 font-sans">
+            {/* Document Header */}
+            <div className="border-b border-border-default bg-bg-2 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-display text-lg font-bold text-text-primary">灵犀妙探 · 医疗报告</div>
+                  <div className="mt-0.5 text-xs text-text-secondary">智能癫痫全周期监测平台</div>
+                </div>
+                <div className="text-right text-xs text-text-secondary">
+                  <div>患者：{selectedPatientName}</div>
+                  <div>报告期：{startDate} 至 {endDate}</div>
+                  <div>生成时间：{new Date().toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+            {/* Sections */}
+            {reportSections.filter((s) => s.key !== 'header').map((section) => (
+              <motion.div
+                key={section.key}
+                animate={{ opacity: section.enabled ? 1 : 0.2 }}
+                transition={{ duration: 0.25 }}
+                className="border-b border-border-subtle px-6 py-4 last:border-0"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="h-0.5 w-4 rounded bg-accent" />
+                  <span className="text-sm font-semibold text-text-primary">{section.title}</span>
+                </div>
+                {section.key === 'stats' && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: '总发作次数', value: '12 次', sub: '较上期 ↑3' },
+                      { label: '平均发作时长', value: '2m 14s', sub: '本周最长 5m08s' },
+                      { label: '最长间隔', value: '3.2 天', sub: '上次 1.8 天' },
+                    ].map((card) => (
+                      <div key={card.label} className="rounded border border-border-default bg-bg-3 p-2 text-center">
+                        <div className="font-mono text-lg text-text-primary">{card.value}</div>
+                        <div className="text-xs text-text-secondary">{card.label}</div>
+                        <div className="text-[10px] text-text-muted">{card.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {section.key === 'heatmap' && (
+                  <div className="mt-1 h-16 rounded border border-border-subtle bg-bg-3">
+                    <div className="flex h-full items-center justify-center text-xs text-text-muted">热力图缩略图（导出时生成）</div>
+                  </div>
+                )}
+                {section.key === 'adherence' && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">本周依从性</span>
+                      <span className="font-mono text-safe">82%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-bg-3">
+                      <div className="h-full rounded-full bg-safe" style={{ width: '82%' }} />
+                    </div>
+                    <div className="text-[10px] text-text-muted">{section.content}</div>
+                  </div>
+                )}
+                {(section.key === 'summary' || section.key === 'note' || section.key === 'appendix') && (
+                  <div className="text-xs text-text-secondary">{section.content}</div>
+                )}
               </motion.div>
             ))}
+            {includeSignature && (
+              <div className="px-6 py-4 text-right text-xs text-text-muted">
+                <div>主治医师签名：_______________</div>
+                <div className="mt-1">日期：{new Date().toLocaleDateString()}</div>
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-2 rounded border border-border-default bg-bg-3 p-2 text-xs text-text-secondary">

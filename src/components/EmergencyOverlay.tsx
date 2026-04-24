@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { MOTION_MODAL_BACKDROP, MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST } from '../constants/motion'
+import { MOTION_MODAL_BACKDROP, MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST, MOTION_TRANSITION_SPRING } from '../constants/motion'
 
 interface Props {
   visible: boolean
@@ -29,14 +29,14 @@ export function EmergencyOverlay({
           animate="animate"
           exit="exit"
           transition={MOTION_TRANSITION_FAST}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0D0000]/90 backdrop-blur"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0D0000]/90 backdrop-blur vignette-pulse"
         >
           <motion.div
             variants={MOTION_MODAL_CONTENT}
             initial="initial"
             animate="animate"
             exit="exit"
-            transition={MOTION_TRANSITION_FAST}
+            transition={MOTION_TRANSITION_SPRING}
             className="w-[560px] rounded-xl border border-danger/60 bg-bg-1 p-6"
           >
             <h2 className="text-2xl font-semibold text-danger">{title}</h2>
