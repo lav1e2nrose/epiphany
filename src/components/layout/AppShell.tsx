@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ActivitySquare, BookOpen, ClipboardList, FileText, HeartPulse, History, LayoutGrid, MapPinned, Settings, Siren, Users } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { Portal } from '../../types/user'
 import { Sidebar, type NavItem } from './Sidebar'
@@ -16,7 +16,7 @@ import { PatientManagement } from '../../portals/doctor/PatientManagement'
 import { SeizureHeatmapPage } from '../../portals/doctor/SeizureHeatmapPage'
 import { WaveformReview } from '../../portals/doctor/WaveformReview'
 import { ReportGenerator } from '../../portals/doctor/ReportGenerator'
-import { MOTION_PAGE_VARIANTS, MOTION_TRANSITION_FAST } from '../../constants/motion'
+import { makePageVariants, MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 function portalNav(portal: Portal): NavItem[] {
   if (portal === 'patient') {
@@ -50,18 +50,34 @@ export function AppShell(): JSX.Element {
   const consumeRequestedPage = useAppStore((state) => state.consumeRequestedPage)
   const [activePage, setActivePage] = useState('live')
   const nav = useMemo(() => portalNav(currentPortal), [currentPortal])
+  // Track nav index to derive slide direction: positive = forward, negative = backward
+  const prevNavIndexRef = useRef(0)
+  const [slideDirection, setSlideDirection] = useState(1)
+
+  const navigateTo = (key: string): void => {
+    const nextIndex = nav.findIndex((item) => item.key === key)
+    const prevIndex = prevNavIndexRef.current
+    setSlideDirection(nextIndex >= prevIndex ? 1 : -1)
+    prevNavIndexRef.current = nextIndex >= 0 ? nextIndex : 0
+    setActivePage(key)
+  }
 
   useEffect(() => {
     const fallback = nav[0]?.key
-    if (fallback) setActivePage(fallback)
+    if (fallback) {
+      prevNavIndexRef.current = 0
+      setActivePage(fallback)
+    }
   }, [nav])
 
   useEffect(() => {
     if (!requestedPage) return
     if (nav.some((item) => item.key === requestedPage)) {
-      setActivePage(requestedPage)
+      navigateTo(requestedPage)
     }
     consumeRequestedPage()
+    // navigateTo is stable (defined in render scope), nav/requestedPage drive this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumeRequestedPage, nav, requestedPage])
 
   const page = useMemo(() => {
@@ -87,12 +103,17 @@ export function AppShell(): JSX.Element {
     <div className="flex h-screen flex-col bg-bg-0 text-text-primary">
       <TitleBar />
       <div className="flex min-h-0 flex-1">
-        <Sidebar items={nav} activeKey={activePage} onSelect={setActivePage} />
+        <Sidebar items={nav} activeKey={activePage} onSelect={navigateTo} />
         <main className="min-h-0 flex-1 overflow-hidden p-4">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" custom={slideDirection}>
             <motion.div
               key={`${currentPortal}-${activePage}`}
-              variants={MOTION_PAGE_VARIANTS}
+              custom={slideDirection}
+              variants={{
+                initial: (dir: number) => makePageVariants(dir).initial,
+                animate: (dir: number) => makePageVariants(dir).animate,
+                exit:    (dir: number) => makePageVariants(dir).exit,
+              }}
               initial="initial"
               animate="animate"
               exit="exit"

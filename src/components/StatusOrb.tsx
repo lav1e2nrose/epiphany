@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { RiskState } from '../types/signal'
 
 interface Props {
@@ -30,12 +31,33 @@ function formatElapsed(seconds: number): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
+/** Brief opacity flash whenever a numeric value changes — 0.6 → 1 over 100 ms */
+function useFlash(value: number): boolean {
+  const [flashing, setFlashing] = useState(false)
+  const prevRef = useRef(value)
+  useEffect(() => {
+    if (prevRef.current === value) return
+    prevRef.current = value
+    setFlashing(true)
+    const t = window.setTimeout(() => setFlashing(false), 100)
+    return () => window.clearTimeout(t)
+  }, [value])
+  return flashing
+}
+
 export function StatusOrb({ score, state, confidence, elapsedSeconds = 0 }: Props): JSX.Element {
+  const scoreFlash = useFlash(Math.round(score))
+
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-border-default bg-bg-2 p-6">
       <div className={`status-orb ${orbClass(state)}`}>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="font-mono text-4xl font-bold">{Math.round(score)}</div>
+          <div
+            className="font-mono text-4xl font-bold transition-opacity duration-100"
+            style={{ opacity: scoreFlash ? 0.6 : 1 }}
+          >
+            {Math.round(score)}
+          </div>
           <div className="text-sm text-text-secondary">{state.toUpperCase()}</div>
         </div>
       </div>
