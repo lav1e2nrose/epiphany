@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import type { RiskState } from '../types/signal'
 
 interface Props {
@@ -31,11 +32,25 @@ function formatElapsed(seconds: number): string {
 }
 
 export function StatusOrb({ score, state, confidence, elapsedSeconds = 0 }: Props): JSX.Element {
+  const rounded = Math.round(score)
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-border-default bg-bg-2 p-6">
       <div className={`status-orb ${orbClass(state)}`}>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="font-mono text-4xl font-bold">{Math.round(score)}</div>
+          <div className="relative h-12 w-16 overflow-hidden">
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={rounded}
+                className="absolute inset-0 flex items-center justify-center font-mono text-4xl font-bold"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              >
+                {rounded}
+              </motion.span>
+            </AnimatePresence>
+          </div>
           <div className="text-sm text-text-secondary">{state.toUpperCase()}</div>
         </div>
       </div>
