@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useFlashKey } from '../../hooks/useFlashKey'
 import { ArtifactBanner } from '../../components/ArtifactBanner'
 import { EmergencyOverlay } from '../../components/EmergencyOverlay'
 import { SOSButton } from '../../components/SOSButton'
@@ -287,6 +288,8 @@ export function LiveDashboard(): JSX.Element {
 
   const latencyMs = latest ? Math.max(0, nowTs - latest.timestamp) : null
   const fusionDotClass = riskState === 'seizure' ? 'bg-danger' : riskState === 'warning' ? 'bg-warn' : 'bg-[#39D0D8]'
+  const countFlash = useFlashKey(summary.todayCount)
+  const countdownFlash = useFlashKey(formatCountdown(medicationCountdownMs))
 
   return (
     <div className="grid h-full grid-cols-[300px_1fr_260px] gap-4">
@@ -347,7 +350,10 @@ export function LiveDashboard(): JSX.Element {
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">今日发作次数</div>
           <div className="mt-2 flex items-end justify-between">
-            <div className="font-mono text-3xl">{summary.todayCount}</div>
+            <div
+              className="font-mono text-3xl transition-opacity duration-100"
+              style={{ opacity: countFlash ? 0.6 : 1 }}
+            >{summary.todayCount}</div>
             <div className={`text-xs ${summary.diff > 0 ? 'text-danger' : summary.diff < 0 ? 'text-safe' : 'text-text-secondary'}`}>
               {summary.diff > 0 ? '↑' : summary.diff < 0 ? '↓' : '→'} {Math.abs(summary.diff)} vs 昨日
             </div>
@@ -381,7 +387,10 @@ export function LiveDashboard(): JSX.Element {
         </div>
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">下次服药倒计时</div>
-          <div className={`mt-2 font-mono text-xl ${medicationCountdownMs <= 60 * 60 * 1000 ? 'text-warn' : 'text-text-primary'}`}>
+          <div
+            className={`mt-2 font-mono text-xl transition-opacity duration-100 ${medicationCountdownMs <= 60 * 60 * 1000 ? 'text-warn' : 'text-text-primary'}`}
+            style={{ opacity: countdownFlash ? 0.6 : 1 }}
+          >
             {formatCountdown(medicationCountdownMs)}
           </div>
         </div>

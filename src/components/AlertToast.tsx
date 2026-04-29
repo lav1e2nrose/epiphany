@@ -37,7 +37,7 @@ export function AlertToast(): JSX.Element {
     return () => window.clearInterval(timer)
   }, [alerts])
 
-  const visibleAlerts = useMemo(() => alerts.slice(-3), [alerts])
+  const visibleAlerts = useMemo(() => alerts.filter((a) => !a.sticky).slice(-3), [alerts])
 
   return (
     <div className="fixed right-4 top-14 z-[5000] space-y-2">
