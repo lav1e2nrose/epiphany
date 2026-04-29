@@ -146,6 +146,23 @@ button:active {
   animation: orb-flash-danger 0.5s ease-in-out infinite;
 }
 
+.status-orb.recovery {
+  background: radial-gradient(circle at 35% 35%, #93C5FD, #388BFD, #1E3A8A);
+  box-shadow: 0 0 40px var(--recovery-glow), 0 0 80px rgba(56, 139, 253, 0.2), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+  animation: orb-pulse-recovery 2s ease-in-out infinite;
+}
+
+.status-orb.emergency {
+  background: radial-gradient(circle at 35% 35%, #FCA5A5, #F85149, #7F1D1D);
+  box-shadow: 0 0 60px var(--danger-glow), 0 0 120px rgba(248, 81, 73, 0.3);
+  animation: orb-flash-danger 0.3s ease-in-out infinite;
+}
+
+@keyframes orb-pulse-recovery {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--recovery-glow); }
+  50%       { transform: scale(1.04); box-shadow: 0 0 60px var(--recovery-glow); }
+}
+
 @keyframes orb-pulse-safe {
   0%,
   100% {
