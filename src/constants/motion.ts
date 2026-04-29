@@ -10,6 +10,18 @@ export const MOTION_PAGE_VARIANTS = {
   exit: { opacity: 0, x: -16 },
 } as const
 
+export function makePageVariants(direction: 1 | -1): {
+  initial: { opacity: number; x: number }
+  animate: { opacity: number; x: number }
+  exit: { opacity: number; x: number }
+} {
+  return {
+    initial: { opacity: 0, x: 40 * direction },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -40 * direction },
+  }
+}
+
 export const MOTION_TOAST_VARIANTS = {
   initial: { x: '100%', opacity: 0 },
   animate: { x: 0, opacity: 1 },

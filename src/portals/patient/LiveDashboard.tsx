@@ -1,5 +1,7 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFlashKey } from '../../hooks/useFlashKey'
+import { MOTION_MODAL_BACKDROP, MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST, MOTION_TRANSITION_SPRING } from '../../constants/motion'
 import { ArtifactBanner } from '../../components/ArtifactBanner'
 import { EmergencyOverlay } from '../../components/EmergencyOverlay'
 import { SOSButton } from '../../components/SOSButton'
@@ -227,22 +229,7 @@ export function LiveDashboard(): JSX.Element {
     [addEvent, events, updateAlertHandling, updateEventHandling],
   )
 
-  const seizureModal = useMemo(() => {
-    if (riskState !== 'warning' && riskState !== 'seizure') return null
-    return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 backdrop-blur-sm">
-        <div className="w-[460px] rounded-lg border border-border-default bg-bg-2 p-5">
-          <h3 className="text-lg font-semibold">监测到异常脑电特征</h3>
-          <p className="mt-2 text-sm text-text-secondary">Pre-ictal 置信度 {(confidence * 100).toFixed(0)}%</p>
-          <p className="mt-1 text-sm text-text-secondary">预计 5-10 分钟内可能发作，请寻找安全位置。</p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('true_positive')}>确实发作了</button>
-            <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('false_positive')}>这是误报</button>
-          </div>
-        </div>
-      </div>
-    )
-  }, [confidence, riskState, submitFeedback])
+  const seizureModalVisible = riskState === 'warning' || riskState === 'seizure'
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -327,9 +314,9 @@ export function LiveDashboard(): JSX.Element {
       </div>
       <div className="space-y-3">
         <ArtifactBanner visible={hasMovementArtifact} message="监测到较强肢体活动干扰 · 预警精度暂时受限 · 建议保持平稳" />
-        <WaveformChart title="EEG" unit="μV" frames={frameBuffer} selector={(f) => f.eeg[0] ?? 0} color="#39D0D8" />
-        <WaveformChart title="NIRS" unit="%" frames={frameBuffer} selector={(f) => f.nirs.spo2} color="#A371F7" />
-        <WaveformChart title="EMG" unit="μV" frames={frameBuffer} selector={(f) => f.emg[0] ?? 0} color="#F0883E" />
+        <WaveformChart title="EEG" unit="μV" frames={frameBuffer} selector={(f) => f.eeg[0] ?? 0} color="#39D0D8" annotateSeizure annotateArtifacts />
+        <WaveformChart title="NIRS" unit="%" frames={frameBuffer} selector={(f) => f.nirs.spo2} color="#A371F7" annotateArtifacts />
+        <WaveformChart title="EMG" unit="μV" frames={frameBuffer} selector={(f) => f.emg[0] ?? 0} color="#F0883E" annotateArtifacts />
         <div className="rounded-md border border-border-default bg-bg-2 px-3 py-2">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
@@ -395,7 +382,36 @@ export function LiveDashboard(): JSX.Element {
           </div>
         </div>
       </div>
-      {seizureModal}
+      <AnimatePresence>
+        {seizureModalVisible && (
+          <motion.div
+            key="seizure-modal-backdrop"
+            variants={MOTION_MODAL_BACKDROP}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={MOTION_TRANSITION_FAST}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 backdrop-blur-sm"
+          >
+            <motion.div
+              variants={MOTION_MODAL_CONTENT}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={MOTION_TRANSITION_SPRING}
+              className="w-[460px] rounded-lg border border-border-default bg-bg-2 p-5"
+            >
+              <h3 className="text-lg font-semibold">监测到异常脑电特征</h3>
+              <p className="mt-2 text-sm text-text-secondary">Pre-ictal 置信度 {(confidence * 100).toFixed(0)}%</p>
+              <p className="mt-1 text-sm text-text-secondary">预计 5-10 分钟内可能发作，请寻找安全位置。</p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('true_positive')}>确实发作了</button>
+                <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('false_positive')}>这是误报</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <EmergencyOverlay visible={emergencyVisible} onClose={() => setEmergencyVisible(false)} />
     </div>
   )

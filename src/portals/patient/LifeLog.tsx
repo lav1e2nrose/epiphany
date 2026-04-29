@@ -12,12 +12,13 @@ function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
 }
 
-function toTimelineText(event: SeizureEvent): { icon: string; color: string; text: string } {
+function toTimelineText(event: SeizureEvent): { icon: string; color: string; dotClass: string; text: string } {
   if (event.type === 'alert' || event.type === 'sos') {
     const durationText = event.durationSec ? ` · 持续${event.durationSec}s` : ''
     return {
       icon: '🔴',
       color: 'text-danger',
+      dotClass: 'bg-danger',
       text: `系统检测事件 · ${event.title} · ${new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}${durationText}`,
     }
   }
@@ -25,12 +26,14 @@ function toTimelineText(event: SeizureEvent): { icon: string; color: string; tex
     return {
       icon: '🟢',
       color: 'text-safe',
+      dotClass: 'bg-safe',
       text: `手动打卡 · 服药记录 · ${new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
     }
   }
   return {
     icon: '⚪',
     color: 'text-text-secondary',
+    dotClass: 'bg-border-emphasis',
     text: event.details ? `普通日志 · ${event.details}` : `普通日志 · ${event.title}`,
   }
 }
@@ -70,15 +73,19 @@ export function LifeLog(): JSX.Element {
     <div className="grid h-full grid-cols-[1fr_360px] gap-4">
       <div className="rounded-md border border-border-default bg-bg-2 p-4">
         <h2 className="text-lg font-semibold">生活日志时间轴</h2>
-        <div className="mt-4 space-y-3 text-sm">
+        <div className="mt-4 text-sm">
           {timeline.length === 0 ? (
             <div className="text-text-secondary">暂无日志，右侧保存后自动回写。</div>
           ) : (
-            timeline.map((item, index) => (
-              <div key={`${item.text}-${index}`} className={item.color}>
-                {item.icon} {item.text}
-              </div>
-            ))
+            <div className="relative">
+              <div className="absolute left-[5px] top-2 bottom-0 w-0.5 bg-border-default" />
+              {timeline.map((item, index) => (
+                <div key={`${item.text}-${index}`} className="relative flex items-start gap-3 pb-4 last:pb-0">
+                  <span className={`relative z-10 mt-[3px] h-3 w-3 flex-shrink-0 rounded-full ${item.dotClass}`} />
+                  <span className={item.color}>{item.text}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
