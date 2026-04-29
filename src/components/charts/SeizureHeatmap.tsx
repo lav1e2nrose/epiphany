@@ -1,4 +1,5 @@
 import * as d3 from 'd3'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HeatmapCell } from '../../types/signal'
 
@@ -146,25 +147,32 @@ export function SeizureHeatmap({ cells, onCellClick }: Props): JSX.Element {
   return (
     <div ref={containerRef} className="relative min-h-0 overflow-auto">
       <svg ref={ref} className="min-w-[640px] w-full rounded-md border border-border-default bg-bg-2 p-2" style={{ height: 'auto', display: 'block' }} />
-      {hovered && (
-        <div
-          className="pointer-events-none absolute z-20 w-56 rounded-md border border-border-default bg-bg-1/97 p-2.5 text-xs shadow-lg"
-          style={{ left: tooltipPos.x, top: tooltipPos.y }}
-        >
-          <div className="font-semibold text-text-primary">
-            {formatDateLabel(hovered.date)}&nbsp;
-            {hovered.hour.toString().padStart(2, '0')}:00–{(hovered.hour + 1).toString().padStart(2, '0')}:00
-          </div>
-          <div className="mt-1.5 space-y-0.5 text-text-secondary">
-            <div>事件类型：{hovered.events.map((e) => (e.type === 'seizure' ? '发作' : '亚临床')).join(' / ') || '无'}</div>
-            <div>持续时长：{hovered.events.map((e) => `${e.durationSec}s`).join(' / ') || '—'}</div>
-            <div>峰值强度：{hovered.events.map((e) => e.peakIntensity).join(' / ') || String(Math.max(hovered.seizureLevel, hovered.intensity))}</div>
-            <div>关联因素：{hovered.events.flatMap((e) => e.factors).join('、') || '无'}</div>
-            <div>标记：{[hovered.missedMed ? '💊 漏服药' : '', hovered.sleepDeprived ? '😴 睡眠不足' : ''].filter(Boolean).join('  ') || '无'}</div>
-          </div>
-          <div className="mt-1.5 text-text-muted">点击跳转至波形回溯</div>
-        </div>
-      )}
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            key={`${hovered.date}-${hovered.hour}`}
+            initial={{ opacity: 0, scale: 0.92, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
+            className="pointer-events-none absolute z-20 w-56 rounded-md border border-border-default bg-bg-1/97 p-2.5 text-xs shadow-lg"
+            style={{ left: tooltipPos.x, top: tooltipPos.y }}
+          >
+            <div className="font-semibold text-text-primary">
+              {formatDateLabel(hovered.date)}&nbsp;
+              {hovered.hour.toString().padStart(2, '0')}:00–{(hovered.hour + 1).toString().padStart(2, '0')}:00
+            </div>
+            <div className="mt-1.5 space-y-0.5 text-text-secondary">
+              <div>事件类型：{hovered.events.map((e) => (e.type === 'seizure' ? '发作' : '亚临床')).join(' / ') || '无'}</div>
+              <div>持续时长：{hovered.events.map((e) => `${e.durationSec}s`).join(' / ') || '—'}</div>
+              <div>峰值强度：{hovered.events.map((e) => e.peakIntensity).join(' / ') || String(Math.max(hovered.seizureLevel, hovered.intensity))}</div>
+              <div>关联因素：{hovered.events.flatMap((e) => e.factors).join('、') || '无'}</div>
+              <div>标记：{[hovered.missedMed ? '💊 漏服药' : '', hovered.sleepDeprived ? '😴 睡眠不足' : ''].filter(Boolean).join('  ') || '无'}</div>
+            </div>
+            <div className="mt-1.5 text-text-muted">点击跳转至波形回溯</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

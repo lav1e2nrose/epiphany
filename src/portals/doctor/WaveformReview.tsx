@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { WaveformChart } from '../../components/charts/WaveformChart'
 import { useAppStore } from '../../store'
@@ -33,9 +33,12 @@ export function WaveformReview(): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; timestamp: number; annotationId?: string } | null>(null)
   const [selectedEegChannels, setSelectedEegChannels] = useState<number[]>([0, 1])
   const dragState = useRef<{ x: number; start: number; end: number } | null>(null)
+  const handleDragState = useRef<{ handle: 'left' | 'right'; x: number; originalEnd: number } | null>(null)
 
   const [dragging, setDragging] = useState(false)
+  const [handleDragging, setHandleDragging] = useState(false)
   const timelineRef = useRef<HTMLDivElement | null>(null)
+  const svgTimelineRef = useRef<SVGSVGElement | null>(null)
   const windowDurationMs = WINDOW_LEVELS[zoomLevel]?.seconds * 1000
 
   const timelineRange = useMemo(() => {
@@ -223,6 +226,81 @@ export function WaveformReview(): JSX.Element {
     setZoomLevel(boundedLevel)
     setWindowEndTs(clamped.end)
   }
+
+  // Attach passive:false wheel listener to the waveform area so preventDefault works
+  useEffect(() => {
+    const el = timelineRef.current
+    if (!el) return
+    const onWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
+      if (event.deltaY < 0) handleZoom(zoomLevel + 1, ratio)
+      else handleZoom(zoomLevel - 1, ratio)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomLevel, windowStartTs, syncedWindowEndTs, timelineRange])
+
+  // SVG timeline: compute ratio helpers
+  const timelineToTs = useCallback(
+    (ratio: number): number => {
+      const { min, max } = timelineRange
+      return Math.round(min + ratio * (max - min))
+    },
+    [timelineRange],
+  )
+  const tsToRatio = useCallback(
+    (ts: number): number => {
+      const { min, max } = timelineRange
+      const span = Math.max(1, max - min)
+      return Math.max(0, Math.min(1, (ts - min) / span))
+    },
+    [timelineRange],
+  )
+
+  // SVG timeline click to position window
+  const handleTimelineClick = (event: React.MouseEvent<SVGSVGElement>): void => {
+    if (handleDragging) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
+    const clickedTs = timelineToTs(ratio)
+    applyWindowByEnd(clickedTs + windowDurationMs / 2)
+  }
+
+  // SVG handle drag: pointer events on SVG
+  const handlePointerDownOnHandle = (event: React.PointerEvent<SVGCircleElement>, handle: 'left' | 'right'): void => {
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    handleDragState.current = { handle, x: event.clientX, originalEnd: syncedWindowEndTs }
+    setHandleDragging(true)
+  }
+  const handlePointerMoveOnTimeline = (event: React.PointerEvent<SVGSVGElement>): void => {
+    if (!handleDragState.current || !svgTimelineRef.current) return
+    const rect = svgTimelineRef.current.getBoundingClientRect()
+    const svgWidth = Math.max(1, rect.width)
+    const dx = event.clientX - handleDragState.current.x
+    const dtRatio = dx / svgWidth
+    const totalSpan = Math.max(1, timelineRange.max - timelineRange.min)
+    const dtMs = dtRatio * totalSpan
+    const { handle, originalEnd } = handleDragState.current
+    if (handle === 'right') {
+      const nextEnd = originalEnd + dtMs
+      applyWindowByEnd(nextEnd)
+    } else {
+      // left handle: shift the whole window start, keeping duration
+      const nextEnd = originalEnd + dtMs
+      applyWindowByEnd(nextEnd)
+    }
+  }
+  const handlePointerUpOnTimeline = (event: React.PointerEvent<SVGSVGElement>): void => {
+    if (handleDragState.current) {
+      handleDragState.current = null
+      setHandleDragging(false)
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
   const featureSnapshot = windowFrames.at(-1)?.features
   const bandpowerData = useMemo(
     () =>
@@ -265,6 +343,29 @@ export function WaveformReview(): JSX.Element {
     return item.note
   }
 
+  // Compute seizure/warning segments across all frameBuffer for SVG timeline overlay
+  const timelineSegments = useMemo(() => {
+    type Segment = { start: number; end: number; kind: 'seizure' | 'warning' }
+    const segs: Segment[] = []
+    let cur: Segment | null = null
+    for (const frame of frameBuffer) {
+      const kind = frame.riskState === 'seizure' ? 'seizure' : frame.riskState === 'warning' ? 'warning' : null
+      if (kind) {
+        if (cur && cur.kind === kind) {
+          cur.end = frame.timestamp
+        } else {
+          if (cur) segs.push(cur)
+          cur = { start: frame.timestamp, end: frame.timestamp, kind }
+        }
+      } else if (cur) {
+        segs.push(cur)
+        cur = null
+      }
+    }
+    if (cur) segs.push(cur)
+    return segs
+  }, [frameBuffer])
+
   return (
     <div className="grid h-full grid-rows-[140px_1fr] gap-3">
       <section className="rounded-md border border-border-default bg-bg-2 p-3 text-sm">
@@ -292,14 +393,61 @@ export function WaveformReview(): JSX.Element {
             {new Date(windowStartTs).toLocaleTimeString()} - {new Date(syncedWindowEndTs).toLocaleTimeString()}
           </span>
         </div>
-        <input
-          className="mt-3 h-2 w-full"
-          type="range"
-          min={timelineRange.min}
-          max={Math.max(timelineRange.min + 1, timelineRange.max)}
-          value={Math.max(timelineRange.min, Math.min(syncedWindowEndTs, timelineRange.max))}
-          onChange={(event) => applyWindowByEnd(Number(event.target.value))}
-        />
+        {/* SVG timeline navigation */}
+        <svg
+          ref={svgTimelineRef}
+          className="mt-3 w-full rounded-sm bg-bg-3"
+          style={{ height: 36, display: 'block', cursor: handleDragging ? 'ew-resize' : 'pointer' }}
+          onClick={handleTimelineClick}
+          onPointerMove={handlePointerMoveOnTimeline}
+          onPointerUp={handlePointerUpOnTimeline}
+          onPointerCancel={handlePointerUpOnTimeline}
+        >
+          {/* Seizure / warning segments */}
+          {timelineSegments.map((seg) => {
+            const x1 = tsToRatio(seg.start) * 100
+            const x2 = tsToRatio(seg.end) * 100
+            const w = Math.max(0.3, x2 - x1)
+            return (
+              <rect
+                key={`${seg.kind}-${seg.start}`}
+                x={`${x1}%`}
+                y={4}
+                width={`${w}%`}
+                height={28}
+                fill={seg.kind === 'seizure' ? 'rgba(248,81,73,0.5)' : 'rgba(210,153,34,0.4)'}
+                rx={2}
+              />
+            )
+          })}
+          {/* Current viewport accent rect + draggable handles */}
+          {(() => {
+            const viewX1 = tsToRatio(windowStartTs) * 100
+            const viewX2 = tsToRatio(syncedWindowEndTs) * 100
+            const viewW = Math.max(1, viewX2 - viewX1)
+            return (
+              <>
+                <rect x={`${viewX1}%`} y={4} width={`${viewW}%`} height={28} fill="rgba(10,132,255,0.18)" rx={2} />
+                <circle
+                  cx={`${viewX1}%`}
+                  cy={18}
+                  r={6}
+                  fill="#0A84FF"
+                  style={{ cursor: 'ew-resize' }}
+                  onPointerDown={(e) => handlePointerDownOnHandle(e, 'left')}
+                />
+                <circle
+                  cx={`${viewX2}%`}
+                  cy={18}
+                  r={6}
+                  fill="#0A84FF"
+                  style={{ cursor: 'ew-resize' }}
+                  onPointerDown={(e) => handlePointerDownOnHandle(e, 'right')}
+                />
+              </>
+            )
+          })()}
+        </svg>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <div className="rounded border border-border-default bg-bg-3 p-2 text-xs">
             <div className="text-text-secondary">EEG 通道选择器（多选）</div>
@@ -321,13 +469,6 @@ export function WaveformReview(): JSX.Element {
         <div
           ref={timelineRef}
           className="relative space-y-3 overflow-auto rounded-md"
-          onWheel={(event) => {
-            event.preventDefault()
-            const rect = event.currentTarget.getBoundingClientRect()
-            const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
-            if (event.deltaY < 0) handleZoom(zoomLevel + 1, ratio)
-            else handleZoom(zoomLevel - 1, ratio)
-          }}
           onPointerDown={(event) => {
             if (event.button !== 0) return
             event.currentTarget.setPointerCapture(event.pointerId)
