@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ActivitySquare, BookOpen, ClipboardList, FileText, HeartPulse, History, LayoutGrid, MapPinned, Settings, Siren, Users } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { Portal } from '../../types/user'
 import { Sidebar, type NavItem } from './Sidebar'
 import { TitleBar } from './TitleBar'
+import { EmergencyOverlay } from '../EmergencyOverlay'
 import { SettingsPage } from '../../pages/SettingsPage'
 import { LiveDashboard } from '../../portals/patient/LiveDashboard'
 import { LifeLog } from '../../portals/patient/LifeLog'
@@ -16,7 +17,7 @@ import { PatientManagement } from '../../portals/doctor/PatientManagement'
 import { SeizureHeatmapPage } from '../../portals/doctor/SeizureHeatmapPage'
 import { WaveformReview } from '../../portals/doctor/WaveformReview'
 import { ReportGenerator } from '../../portals/doctor/ReportGenerator'
-import { MOTION_PAGE_VARIANTS, MOTION_TRANSITION_FAST } from '../../constants/motion'
+import { makePageVariants, MOTION_TRANSITION_FAST } from '../../constants/motion'
 
 function portalNav(portal: Portal): NavItem[] {
   if (portal === 'patient') {
@@ -48,21 +49,58 @@ export function AppShell(): JSX.Element {
   const currentPortal = useAppStore((state) => state.currentPortal)
   const requestedPage = useAppStore((state) => state.requestedPage)
   const consumeRequestedPage = useAppStore((state) => state.consumeRequestedPage)
+  const alerts = useAppStore((state) => state.alerts)
+  const updateAlertHandling = useAppStore((state) => state.updateAlertHandling)
   const [activePage, setActivePage] = useState('live')
+  const [pageDirection, setPageDirection] = useState<1 | -1>(1)
+  const activePageRef = useRef(activePage)
+  activePageRef.current = activePage
   const nav = useMemo(() => portalNav(currentPortal), [currentPortal])
 
   useEffect(() => {
     const fallback = nav[0]?.key
-    if (fallback) setActivePage(fallback)
+    if (fallback) {
+      setPageDirection(1)
+      setActivePage(fallback)
+    }
   }, [nav])
 
   useEffect(() => {
     if (!requestedPage) return
     if (nav.some((item) => item.key === requestedPage)) {
+      const newIndex = nav.findIndex((item) => item.key === requestedPage)
+      const oldIndex = nav.findIndex((item) => item.key === activePageRef.current)
+      setPageDirection(newIndex >= oldIndex ? 1 : -1)
       setActivePage(requestedPage)
     }
     consumeRequestedPage()
   }, [consumeRequestedPage, nav, requestedPage])
+
+  const guardianEmergency = useMemo(
+    () =>
+      currentPortal === 'guardian'
+        ? (alerts.find(
+            (alert) => alert.type === 'error' && alert.sticky === true && alert.handlingStatus === 'pending',
+          ) ?? null)
+        : null,
+    [alerts, currentPortal],
+  )
+
+  const handleSelect = useCallback(
+    (key: string) => {
+      const newIndex = nav.findIndex((item) => item.key === key)
+      const oldIndex = nav.findIndex((item) => item.key === activePageRef.current)
+      setPageDirection(newIndex >= oldIndex ? 1 : -1)
+      setActivePage(key)
+    },
+    [nav],
+  )
+
+  const handleGuardianEmergencyClose = useCallback(() => {
+    if (guardianEmergency) {
+      updateAlertHandling(guardianEmergency.id, 'acknowledged')
+    }
+  }, [guardianEmergency, updateAlertHandling])
 
   const page = useMemo(() => {
     const key = activePage || nav[0]?.key
@@ -87,12 +125,12 @@ export function AppShell(): JSX.Element {
     <div className="flex h-screen flex-col bg-bg-0 text-text-primary">
       <TitleBar />
       <div className="flex min-h-0 flex-1">
-        <Sidebar items={nav} activeKey={activePage} onSelect={setActivePage} />
+        <Sidebar items={nav} activeKey={activePage} onSelect={handleSelect} />
         <main className="min-h-0 flex-1 overflow-hidden p-4">
           <AnimatePresence mode="wait">
             <motion.div
               key={`${currentPortal}-${activePage}`}
-              variants={MOTION_PAGE_VARIANTS}
+              variants={makePageVariants(pageDirection)}
               initial="initial"
               animate="animate"
               exit="exit"
@@ -104,6 +142,14 @@ export function AppShell(): JSX.Element {
           </AnimatePresence>
         </main>
       </div>
+      {currentPortal === 'guardian' && (
+        <EmergencyOverlay
+          visible={guardianEmergency !== null}
+          onClose={handleGuardianEmergencyClose}
+          title="高危发作报警"
+          message="患者监测到高风险发作事件，请立即联系患者并确认其安全状态。"
+        />
+      )}
     </div>
   )
 }
