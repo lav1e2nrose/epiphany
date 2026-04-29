@@ -78,6 +78,8 @@ export function LiveDashboard(): JSX.Element {
   const updateAlertHandling = useAppStore((state) => state.updateAlertHandling)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
+  const [connectStartTs, setConnectStartTs] = useState<number | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const historyRef = useRef<ProcessedFrame[]>(frameBuffer)
   const riskRef = useRef<RiskState>('safe')
   const lastAlertTsRef = useRef(0)
@@ -167,13 +169,18 @@ export function LiveDashboard(): JSX.Element {
     }
 
     setConnectionStatus('connecting')
-    void dataSource.connect(config).catch(() => setConnectionStatus('error'))
+    const started = Date.now()
+    void dataSource.connect(config).then(() => {
+      setConnectStartTs(started)
+    }).catch(() => setConnectionStatus('error'))
 
     return () => {
       unsubscribeFrame()
       unsubscribeStatus()
       unsubscribeError()
       void dataSource.disconnect()
+      setConnectStartTs(null)
+      setElapsedSeconds(0)
     }
   }, [
     addEvent,
@@ -237,9 +244,13 @@ export function LiveDashboard(): JSX.Element {
   }, [confidence, riskState, submitFeedback])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNowTs(Date.now()), 1000)
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      setNowTs(now)
+      setElapsedSeconds(connectStartTs !== null ? Math.floor((now - connectStartTs) / 1000) : 0)
+    }, 1000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [connectStartTs])
 
   const summary = useMemo(() => {
     const startOfToday = new Date()
@@ -280,7 +291,7 @@ export function LiveDashboard(): JSX.Element {
   return (
     <div className="grid h-full grid-cols-[300px_1fr_260px] gap-4">
       <div className="space-y-4">
-        <StatusOrb score={riskScore} state={riskState} confidence={confidence} />
+        <StatusOrb score={riskScore} state={riskState} confidence={confidence} elapsedSeconds={elapsedSeconds} />
         <div className="flex items-center justify-center rounded-lg border border-border-default bg-bg-2 p-4">
           <SOSButton
             holdDuration={3000}
