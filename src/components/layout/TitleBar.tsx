@@ -1,17 +1,30 @@
+import { motion } from 'framer-motion'
 import { Activity, Minus, MonitorUp, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { PortalSwitcher } from './PortalSwitcher'
 
 export function TitleBar(): JSX.Element {
   const connectionStatus = useAppStore((state) => state.connectionStatus)
   const latestFrame = useAppStore((state) => state.latestFrame)
+  const [connFlashKey, setConnFlashKey] = useState(0)
+  const prevStatusRef = useRef(connectionStatus)
 
-  const liveClass =
-    connectionStatus === 'connected' || connectionStatus === 'mock'
-      ? 'bg-safe animate-pulse'
-      : connectionStatus === 'error'
-        ? 'bg-danger animate-fast-pulse'
-        : 'bg-text-muted'
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = connectionStatus
+    if (
+      (connectionStatus === 'connected' || connectionStatus === 'mock') &&
+      prev !== 'connected' &&
+      prev !== 'mock'
+    ) {
+      setConnFlashKey((k) => k + 1)
+    }
+  }, [connectionStatus])
+
+  const isConnected = connectionStatus === 'connected' || connectionStatus === 'mock'
+  const isError = connectionStatus === 'error'
+  const stableColor = isConnected ? '#2EA043' : isError ? '#F85149' : '#484F58'
 
   return (
     <header className="title-bar flex h-10 items-center justify-between border-b border-border-subtle bg-bg-1 px-3">
@@ -23,7 +36,18 @@ export function TitleBar(): JSX.Element {
       <div className="flex items-center gap-3">
         <PortalSwitcher />
         <div className="flex items-center gap-2 rounded-md border border-border-default px-2 py-1 text-xs">
-          <span className={`h-2 w-2 rounded-full ${liveClass}`} />
+          <motion.span
+            key={connFlashKey}
+            className={`h-2 w-2 rounded-full ${isConnected ? 'animate-pulse' : isError ? 'animate-fast-pulse' : ''}`}
+            initial={{ backgroundColor: '#484F58' }}
+            animate={{
+              backgroundColor:
+                connFlashKey > 0 && isConnected
+                  ? ['#484F58', '#4ADE80', stableColor]
+                  : [stableColor],
+            }}
+            transition={{ duration: 0.6 }}
+          />
           <span className="font-mono">LIVE</span>
         </div>
         <div className="rounded-md border border-border-default px-2 py-1 text-xs text-text-secondary">

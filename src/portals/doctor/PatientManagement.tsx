@@ -105,7 +105,7 @@ export function PatientManagement(): JSX.Element {
           {filtered.map((patient) => {
             const risk = riskLabel(patient.riskLevel)
             return (
-              <tr key={patient.id} className="border-t border-border-subtle hover:bg-bg-3/30">
+              <tr key={patient.id} className="cursor-pointer border-t border-border-subtle transition-colors duration-150 hover:bg-bg-3/30" onClick={() => toHeatmap(patient.id)}>
                 <td>{patient.name}</td>
                 <td>{patient.age}</td>
                 <td>{patient.weeklySeizures}次</td>
@@ -122,7 +122,7 @@ export function PatientManagement(): JSX.Element {
                   </div>
                 </td>
                 <td>
-                  <button className="rounded border border-accent/60 px-2 py-0.5 text-xs text-accent" onClick={() => toHeatmap(patient.id)}>
+                  <button className="rounded border border-accent/60 px-2 py-0.5 text-xs text-accent transition-colors duration-150 hover:bg-accent/10" onClick={(e) => { e.stopPropagation(); toHeatmap(patient.id) }}>
                     查看
                   </button>
                 </td>

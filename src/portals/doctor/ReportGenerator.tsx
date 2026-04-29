@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
+import { SeizureHeatmap } from '../../components/charts/SeizureHeatmap'
 import { useAppStore } from '../../store'
+import type { HeatmapCell } from '../../types/signal'
 
 const REPORT_MODULE_OPTIONS = [
   { key: 'stats', label: '发作次数统计' },
@@ -12,9 +14,55 @@ const REPORT_MODULE_OPTIONS = [
 ] as const
 type ReportModuleKey = (typeof REPORT_MODULE_OPTIONS)[number]['key']
 
+function buildPreviewCells(patientSeed: string): HeatmapCell[] {
+  let seed = patientSeed.split('').reduce((a, c) => a + c.charCodeAt(0), 0) || 13
+  const rand = (): number => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+  const cells: HeatmapCell[] = []
+  const now = new Date()
+  for (let day = 0; day < 7; day++) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - day)
+    const key = d.toISOString().slice(0, 10)
+    for (let hour = 0; hour < 24; hour++) {
+      const seizureLevel = rand() > 0.94 ? Math.ceil(rand() * 4) : 0
+      const intensity = seizureLevel > 0 ? 0 : rand() > 0.84 ? Math.ceil(rand() * 4) : 0
+      cells.push({
+        date: key,
+        hour,
+        intensity,
+        seizureLevel,
+        events:
+          seizureLevel || intensity
+            ? [
+                {
+                  type: seizureLevel > 0 ? 'seizure' : 'subclinical',
+                  durationSec: 30 + Math.round(rand() * 200),
+                  peakIntensity: Math.max(seizureLevel, intensity),
+                  factors: [rand() > 0.5 ? '漏服药' : '睡眠不足'],
+                },
+              ]
+            : [],
+        missedMed: rand() > 0.85,
+        sleepDeprived: rand() > 0.8,
+      })
+    }
+  }
+  return cells
+}
+
+function formatDuration(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+
 export function ReportGenerator(): JSX.Element {
   const pushAlert = useAppStore((state) => state.pushAlert)
   const patients = useAppStore((state) => state.patients)
+  const events = useAppStore((state) => state.events)
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
   const [selectedPatientId, setSelectedPatientId] = useState('all')
@@ -38,6 +86,61 @@ export function ReportGenerator(): JSX.Element {
   const [lastExportPath, setLastExportPath] = useState('')
 
   const exporting = progress > 0 && progress < 100
+
+  // Real stats computed from store events within the selected date range
+  const reportStats = useMemo(() => {
+    const startMs = new Date(startDate).getTime()
+    const endMs = new Date(endDate).getTime() + 86400000
+    const periodMs = endMs - startMs
+    const prevStartMs = startMs - periodMs
+
+    const current = events.filter(
+      (e) => e.riskState === 'seizure' && e.timestamp >= startMs && e.timestamp < endMs,
+    )
+    const previous = events.filter(
+      (e) => e.riskState === 'seizure' && e.timestamp >= prevStartMs && e.timestamp < startMs,
+    )
+
+    const totalCount = current.length
+    const countDiff = totalCount - previous.length
+
+    const withDuration = current.filter((e) => e.durationSec !== undefined && (e.durationSec ?? 0) > 0)
+    const avgDurationSec =
+      withDuration.length > 0
+        ? Math.round(withDuration.reduce((sum, e) => sum + (e.durationSec ?? 0), 0) / withDuration.length)
+        : null
+
+    const sorted = current.map((e) => e.timestamp).sort((a, b) => a - b)
+    let maxGapDays = 0
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = ((sorted[i] ?? 0) - (sorted[i - 1] ?? 0)) / (24 * 3600 * 1000)
+      if (gap > maxGapDays) maxGapDays = gap
+    }
+
+    return {
+      totalCount,
+      countDiff,
+      avgDurationSec,
+      maxGapDays: Number(maxGapDays.toFixed(1)),
+    }
+  }, [events, startDate, endDate])
+
+  // Adherence computed from medication-type events in the date range
+  const adherenceStats = useMemo(() => {
+    const startMs = new Date(startDate).getTime()
+    const endMs = new Date(endDate).getTime() + 86400000
+    const days = Math.max(1, Math.round((endMs - startMs) / 86400000))
+    const expected = days * 3
+    const taken = events.filter((e) => e.type === 'medication' && e.timestamp >= startMs && e.timestamp < endMs).length
+    const percent = taken > 0 ? Math.round((taken / expected) * 100) : null
+    return { taken, expected, percent }
+  }, [events, startDate, endDate])
+
+  // 7-day heatmap cells for the inline preview
+  const previewCells = useMemo<HeatmapCell[]>(
+    () => buildPreviewCells(selectedPatientId),
+    [selectedPatientId],
+  )
 
   const exportPdf = async (): Promise<void> => {
     if (exporting) return
@@ -276,9 +379,21 @@ export function ReportGenerator(): JSX.Element {
                 {section.key === 'stats' && (
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { label: '总发作次数', value: '12 次', sub: '较上期 ↑3' },
-                      { label: '平均发作时长', value: '2m 14s', sub: '本周最长 5m08s' },
-                      { label: '最长间隔', value: '3.2 天', sub: '上次 1.8 天' },
+                      {
+                        label: '总发作次数',
+                        value: `${reportStats.totalCount} 次`,
+                        sub: reportStats.totalCount === 0 ? '期间无记录' : `较上期 ${reportStats.countDiff >= 0 ? `↑${reportStats.countDiff}` : `↓${Math.abs(reportStats.countDiff)}`}`,
+                      },
+                      {
+                        label: '平均发作时长',
+                        value: reportStats.avgDurationSec !== null ? formatDuration(reportStats.avgDurationSec) : '--',
+                        sub: reportStats.avgDurationSec !== null ? '发作时长统计' : '暂无时长记录',
+                      },
+                      {
+                        label: '最长无发作间隔',
+                        value: reportStats.maxGapDays > 0 ? `${reportStats.maxGapDays} 天` : '--',
+                        sub: reportStats.maxGapDays > 0 ? '本期最长间隔' : '暂无间隔数据',
+                      },
                     ].map((card) => (
                       <div key={card.label} className="rounded border border-border-default bg-bg-3 p-2 text-center">
                         <div className="font-mono text-lg text-text-primary">{card.value}</div>
@@ -289,20 +404,29 @@ export function ReportGenerator(): JSX.Element {
                   </div>
                 )}
                 {section.key === 'heatmap' && (
-                  <div className="mt-1 h-16 rounded border border-border-subtle bg-bg-3">
-                    <div className="flex h-full items-center justify-center text-xs text-text-muted">热力图缩略图（导出时生成）</div>
+                  <div className="pointer-events-none overflow-hidden rounded border border-border-subtle">
+                    <SeizureHeatmap cells={previewCells} />
                   </div>
                 )}
                 {section.key === 'adherence' && (
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-text-secondary">本周依从性</span>
-                      <span className="font-mono text-safe">82%</span>
+                      <span className="text-text-secondary">本期依从性</span>
+                      <span className={`font-mono ${adherenceStats.percent !== null ? 'text-safe' : 'text-text-muted'}`}>
+                        {adherenceStats.percent !== null ? `${adherenceStats.percent}%` : '暂无服药记录'}
+                      </span>
                     </div>
-                    <div className="h-2 rounded-full bg-bg-3">
-                      <div className="h-full rounded-full bg-safe" style={{ width: '82%' }} />
-                    </div>
-                    <div className="text-[10px] text-text-muted">{section.content}</div>
+                    {adherenceStats.percent !== null && (
+                      <>
+                        <div className="h-2 rounded-full bg-bg-3">
+                          <div className="h-full rounded-full bg-safe transition-all" style={{ width: `${adherenceStats.percent}%` }} />
+                        </div>
+                        <div className="text-[10px] text-text-muted">{adherenceStats.taken}/{adherenceStats.expected} 次（每日 3 次）</div>
+                      </>
+                    )}
+                    {adherenceStats.percent === null && (
+                      <div className="text-[10px] text-text-muted">{section.content}</div>
+                    )}
                   </div>
                 )}
                 {(section.key === 'summary' || section.key === 'note' || section.key === 'appendix') && (

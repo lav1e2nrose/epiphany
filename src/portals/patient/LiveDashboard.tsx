@@ -290,6 +290,8 @@ export function LiveDashboard(): JSX.Element {
   const fusionDotClass = riskState === 'seizure' ? 'bg-danger' : riskState === 'warning' ? 'bg-warn' : 'bg-[#39D0D8]'
   const countFlash = useFlashKey(summary.todayCount)
   const countdownFlash = useFlashKey(formatCountdown(medicationCountdownMs))
+  const adherenceFlash = useFlashKey(adherence.percent)
+  const lastEventFlash = useFlashKey(summary.latestEvent?.timestamp ?? 0)
 
   return (
     <div className="grid h-full grid-cols-[300px_1fr_260px] gap-4">
@@ -361,7 +363,10 @@ export function LiveDashboard(): JSX.Element {
         </div>
         <div className="rounded-md border border-border-default bg-bg-2 p-3">
           <div className="text-xs text-text-secondary">上次事件</div>
-          <div className="mt-2 text-sm">
+          <div
+            className="mt-2 text-sm transition-opacity duration-100"
+            style={{ opacity: lastEventFlash ? 0.6 : 1 }}
+          >
             {summary.latestEvent
               ? `${new Date(summary.latestEvent.timestamp).toLocaleTimeString('zh-CN', {
                   hour: '2-digit',
@@ -377,7 +382,7 @@ export function LiveDashboard(): JSX.Element {
               <RadialBarChart data={[{ value: adherence.percent }]} startAngle={90} endAngle={-270} innerRadius="64%" outerRadius="92%">
                 <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
                 <RadialBar dataKey="value" cornerRadius={8} fill="var(--accent)" background={{ fill: 'var(--bg-3)' }} />
-                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-text-primary font-mono text-[20px]">
+                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-text-primary font-mono text-[20px]" opacity={adherenceFlash ? 0.6 : 1}>
                   {adherence.percent}%
                 </text>
               </RadialBarChart>

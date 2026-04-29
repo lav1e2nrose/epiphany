@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { WaveformChart } from '../../components/charts/WaveformChart'
 import { useAppStore } from '../../store'
@@ -33,6 +33,8 @@ export function WaveformReview(): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; timestamp: number; annotationId?: string } | null>(null)
   const [selectedEegChannels, setSelectedEegChannels] = useState<number[]>([0, 1])
   const dragState = useRef<{ x: number; start: number; end: number } | null>(null)
+  const svgTimelineDragRef = useRef(false)
+  const svgTimelineRef = useRef<SVGSVGElement | null>(null)
 
   const [dragging, setDragging] = useState(false)
   const timelineRef = useRef<HTMLDivElement | null>(null)
@@ -44,41 +46,60 @@ export function WaveformReview(): JSX.Element {
     return { min: first, max: Math.max(first + 1, last) }
   }, [frameBuffer])
 
-  const clampWindow = (start: number, end: number): { start: number; end: number } => {
-    const duration = Math.max(1000, end - start)
-    if (timelineRange.max <= timelineRange.min) return { start: timelineRange.min, end: timelineRange.min + duration }
-    if (duration >= timelineRange.max - timelineRange.min) return { start: timelineRange.min, end: timelineRange.max }
-    let nextStart = start
-    let nextEnd = end
-    if (nextStart < timelineRange.min) {
-      nextStart = timelineRange.min
-      nextEnd = nextStart + duration
+  // Merge consecutive frames with the same non-safe risk state into coloured segments
+  const timelineEventSegments = useMemo(() => {
+    type Seg = { start: number; end: number; level: 'warning' | 'seizure' }
+    const segs: Seg[] = []
+    let current: Seg | null = null
+    for (const frame of frameBuffer) {
+      const level = frame.riskState === 'seizure' ? 'seizure' : frame.riskState === 'warning' ? 'warning' : null
+      if (!level) { if (current) { segs.push(current); current = null } continue }
+      if (current && current.level === level) { current.end = frame.timestamp }
+      else { if (current) segs.push(current); current = { start: frame.timestamp, end: frame.timestamp, level } }
     }
-    if (nextEnd > timelineRange.max) {
-      nextEnd = timelineRange.max
-      nextStart = nextEnd - duration
-    }
-    return { start: nextStart, end: nextEnd }
-  }
+    if (current) segs.push(current)
+    return segs
+  }, [frameBuffer])
 
-  const applyWindowByEnd = (nextEnd: number): void => {
-    const rawStart = nextEnd - windowDurationMs
-    const next = clampWindow(rawStart, nextEnd)
-    setWindowEndTs(next.end)
-  }
+  const clampWindow = useCallback(
+    (start: number, end: number): { start: number; end: number } => {
+      const duration = Math.max(1000, end - start)
+      if (timelineRange.max <= timelineRange.min) return { start: timelineRange.min, end: timelineRange.min + duration }
+      if (duration >= timelineRange.max - timelineRange.min) return { start: timelineRange.min, end: timelineRange.max }
+      let nextStart = start
+      let nextEnd = end
+      if (nextStart < timelineRange.min) {
+        nextStart = timelineRange.min
+        nextEnd = nextStart + duration
+      }
+      if (nextEnd > timelineRange.max) {
+        nextEnd = timelineRange.max
+        nextStart = nextEnd - duration
+      }
+      return { start: nextStart, end: nextEnd }
+    },
+    [timelineRange],
+  )
+
+  const applyWindowByEnd = useCallback(
+    (nextEnd: number): void => {
+      const rawStart = nextEnd - windowDurationMs
+      const next = clampWindow(rawStart, nextEnd)
+      setWindowEndTs(next.end)
+    },
+    [clampWindow, windowDurationMs],
+  )
 
   useEffect(() => {
     const latest = frameBuffer.at(-1)?.timestamp
     if (latest && !dragging) applyWindowByEnd(latest)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameBuffer, zoomLevel, dragging])
+  }, [frameBuffer, dragging, applyWindowByEnd])
 
   useEffect(() => {
     if (!reviewFocusTimestamp) return
     applyWindowByEnd(reviewFocusTimestamp + windowDurationMs / 2)
     setReviewFocusTimestamp(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewFocusTimestamp, setReviewFocusTimestamp, windowDurationMs])
+  }, [reviewFocusTimestamp, setReviewFocusTimestamp, windowDurationMs, applyWindowByEnd])
 
   const rawWindowStartTs = windowEndTs - windowDurationMs
   const { start: windowStartTs, end: syncedWindowEndTs } = clampWindow(rawWindowStartTs, windowEndTs)
@@ -266,7 +287,7 @@ export function WaveformReview(): JSX.Element {
   }
 
   return (
-    <div className="grid h-full grid-rows-[140px_1fr] gap-3">
+    <div className="grid h-full grid-rows-[auto_1fr] gap-3">
       <section className="rounded-md border border-border-default bg-bg-2 p-3 text-sm">
         <div className="flex items-center justify-between text-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -292,14 +313,62 @@ export function WaveformReview(): JSX.Element {
             {new Date(windowStartTs).toLocaleTimeString()} - {new Date(syncedWindowEndTs).toLocaleTimeString()}
           </span>
         </div>
-        <input
-          className="mt-3 h-2 w-full"
-          type="range"
-          min={timelineRange.min}
-          max={Math.max(timelineRange.min + 1, timelineRange.max)}
-          value={Math.max(timelineRange.min, Math.min(syncedWindowEndTs, timelineRange.max))}
-          onChange={(event) => applyWindowByEnd(Number(event.target.value))}
-        />
+        {/* SVG full-day timeline — coloured segments show seizure/warning events, blue overlay = current window */}
+        <svg
+          ref={svgTimelineRef}
+          className="mt-3 h-6 w-full cursor-pointer select-none rounded"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId)
+            svgTimelineDragRef.current = true
+            const rect = e.currentTarget.getBoundingClientRect()
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            applyWindowByEnd(timelineRange.min + ratio * (timelineRange.max - timelineRange.min))
+          }}
+          onPointerMove={(e) => {
+            if (!svgTimelineDragRef.current) return
+            const rect = e.currentTarget.getBoundingClientRect()
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            applyWindowByEnd(timelineRange.min + ratio * (timelineRange.max - timelineRange.min))
+          }}
+          onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); svgTimelineDragRef.current = false }}
+          onPointerCancel={() => { svgTimelineDragRef.current = false }}
+        >
+          {/* Track background */}
+          <rect x="0" y="0" width="100%" height="100%" fill="var(--bg-3)" rx="3" />
+
+          {/* Event segments: seizure = red, warning = amber */}
+          {timelineEventSegments.map((seg, i) => {
+            const span = Math.max(1, timelineRange.max - timelineRange.min)
+            const x = ((seg.start - timelineRange.min) / span) * 100
+            const w = Math.max(0.4, ((seg.end - seg.start) / span) * 100)
+            return (
+              <rect
+                key={i}
+                x={`${x}%`}
+                y="2"
+                width={`${w}%`}
+                height="calc(100% - 4px)"
+                fill={seg.level === 'seizure' ? 'rgba(248,81,73,0.75)' : 'rgba(210,153,34,0.65)'}
+                rx="1"
+              />
+            )
+          })}
+
+          {/* Current window overlay */}
+          {(() => {
+            const span = Math.max(1, timelineRange.max - timelineRange.min)
+            const wx = ((windowStartTs - timelineRange.min) / span) * 100
+            const ww = Math.max(0.5, ((syncedWindowEndTs - windowStartTs) / span) * 100)
+            return (
+              <>
+                <rect x={`${wx}%`} y="0" width={`${ww}%`} height="100%" fill="rgba(10,132,255,0.18)" rx="2" />
+                <rect x={`${wx}%`} y="0" width={`${ww}%`} height="100%" fill="none" stroke="var(--accent)" strokeWidth="1.5" rx="2" />
+                {/* Right-edge drag handle */}
+                <rect x={`${Math.min(99.5, wx + ww) - 0.3}%`} y="0" width="3" height="100%" fill="var(--accent)" rx="1.5" />
+              </>
+            )
+          })()}
+        </svg>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <div className="rounded border border-border-default bg-bg-3 p-2 text-xs">
             <div className="text-text-secondary">EEG 通道选择器（多选）</div>
