@@ -1,0 +1,1395 @@
+你是一名顶级全栈工程师，同时具备医疗级软件的 UI/UX 设计审美。
+你现在要从零构建一个名为 **"灵犀妙探"** 的 PC 桌面应用程序。
+
+这不是网页，不是 demo，不是大学作业。
+这是一款面向**家庭长程监测与临床诊断辅助**的医疗级癫痫管理平台，代码质量和视觉标准对标 $100,000 级别的医疗 SaaS 产品。
+
+---
+
+## PART -1 · 产品定位（v2 修订，必读）
+
+> 本版本根据临床专家（郭老师，癫痫中心副主任医师）访谈反馈进行了重要定位调整。
+> 设计与文案中**必须**贯彻以下定位，不可回退到泛化的"实时预警器"叙事。
+
+### 核心定位
+**家庭癫痫长程监测 + 诊断辅助 + 医患协作平台**
+
+灵犀妙探不是一个简单的"实时报警器"。它解决的是临床上一个**未被满足的关键需求**：
+
+> *"部分癫痫患者发作稀少，住院期间难以捕捉到发作。如果在家睡觉时佩戴头环，可对睡眠中的发作进行长程监测，结合视频形成'家庭简易脑电监测单元'，帮助医生发现发作事件、记录发作表现，回溯诊断。"*  — 郭老师
+
+### 三层价值主张（按优先级）
+
+1. **诊断辅助（最高优先级）**：在患者居家场景下捕获实际发作事件，提供原始 EEG + 症状描述 + 算法标注的可视化报告，作为医生临床决策的客观依据。
+2. **家庭长程监测**：尤其是夜间睡眠监测 + 视频联动，弥补院内短时监测的盲区。
+3. **辅助预警**：对已知患者，在可能发作前给出提示（次要价值，因为居家场景下医生无法实时响应，意义有限）。
+
+### 设计含义
+- **居家场景**：以**回顾性记录**为主，避免暗示"医生会立刻看到你的预警"
+- **院内场景**（可选模式）：才适合强调实时预警
+- 所有"预警"相关文案均需附带"事件已记录，将在下次复诊由医生回顾"等暗示
+
+---
+
+## PART 0 · 技术栈（不可妥协）
+
+```
+桌面框架:    Electron 28+（frameless window，自定义标题栏）
+前端框架:    React 18 + TypeScript（严格模式，零 any）
+构建工具:    Vite 5
+样式方案:    Tailwind CSS（仅核心工具类）+ CSS Variables + CSS Modules（复杂组件）
+动画:        Framer Motion（页面切换、状态变化、弹窗）
+图表:        D3.js（热力图、波形图底层渲染）+ Recharts（统计图表）
+状态管理:    Zustand（全局状态 + 数据流）
+串口/BLE:   Electron IPC → Node.js serialport / noble（仅接口，不强制运行）
+本地存储:   electron-store（事件日志、用户配置、既往病史、医患消息持久化）
+语音识别:   Web Speech API（webkitSpeechRecognition）/ 中文 zh-CN
+            ※ 用于患者端 AI 引导式诱因追问；不可用时回退为文字输入
+视频录制:   Electron desktopCapturer + MediaRecorder（监护人端联动卧室摄像头）
+            ※ Mock 模式下用占位视频片段演示
+```
+
+---
+
+## PART 1 · 设计系统
+
+### 1.1 色彩系统（CSS Variables，全局注入）
+
+```css
+:root {
+  /* 背景层级 */
+  --bg-0: #080C10;
+  --bg-1: #0D1117;
+  --bg-2: #161B22;
+  --bg-3: #1C2128;
+
+  /* 边框 */
+  --border-subtle: #21262D;
+  --border-default: #30363D;
+  --border-emphasis: #484F58;
+
+  /* 文字 */
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted: #484F58;
+
+  /* 状态色 */
+  --safe:    #2EA043;
+  --safe-glow: rgba(46, 160, 67, 0.4);
+  --warn:    #D29922;
+  --warn-glow: rgba(210, 153, 34, 0.4);
+  --danger:  #F85149;
+  --danger-glow: rgba(248, 81, 73, 0.4);
+  --recovery: #388BFD;
+  --recovery-glow: rgba(56, 139, 253, 0.4);
+
+  /* 信号线色 */
+  --eeg-color:  #39D0D8;   /* 青色 · EEG（主角，最显著） */
+  --nirs-color: #A371F7;   /* 紫色 · NIRS（辅助，弱化） */
+  --emg-color:  #F0883E;   /* 橙色 · EMG */
+
+  /* 品牌色 */
+  --accent: #0A84FF;
+  --accent-dim: rgba(10, 132, 255, 0.15);
+
+  /* 沟通通道色 */
+  --chat-online:  #2EA043;
+  --chat-offline: #6E7681;
+  --chat-bubble-doctor:  #1F2A3D;
+  --chat-bubble-patient: #1E2A1E;
+
+  /* 热力图色阶（亚临床 · 绿系） */
+  --heat-0: #161B22;
+  --heat-1: #0E4429;
+  --heat-2: #006D32;
+  --heat-3: #26A641;
+  --heat-4: #39D353;
+
+  /* 热力图色阶（发作 · 红系） */
+  --heat-s1: #3D1A1A;
+  --heat-s2: #7A2020;
+  --heat-s3: #C0392B;
+  --heat-s4: #F85149;
+}
+```
+
+### 1.2 字体系统
+
+```css
+--font-display: 'Syne', sans-serif;
+--font-body:    'DM Sans', sans-serif;
+--font-mono:    'JetBrains Mono', monospace;
+```
+
+### 1.3 组件规范
+
+- `border-radius`: 统一 6px，弹窗 10px，圆形按钮 50%
+- `box-shadow`（卡片）: `0 1px 3px rgba(0,0,0,0.4)`
+- 所有可交互元素：`transition: all 150ms ease`
+- 按钮按下：`transform: scale(0.96)`
+- 图标库：Lucide React
+
+---
+
+## PART 2 · 数据架构（核心，必须严格实现）
+
+### 2.1 数据帧标准结构（同 v1）
+
+```typescript
+// src/types/signal.ts
+
+export interface SignalFrame {
+  timestamp: number
+  eeg: number[]               // 8通道原始 μV 值
+  nirs: { hbo: number; hbr: number; spo2: number }
+  emg: number[]
+  imu?: { ax: number; ay: number; az: number }
+  batteryLevel: number
+}
+
+export interface ProcessedFrame extends SignalFrame {
+  riskScore: number
+  riskState: RiskState
+  artifacts: ArtifactType[]
+  features: SeizureFeatures
+}
+
+export type RiskState = 'safe' | 'warning' | 'seizure' | 'recovery' | 'emergency'
+export type ArtifactType = 'chewing' | 'movement' | 'electrode_pop' | 'power_line'
+
+export interface SeizureFeatures {
+  spikeCount: number
+  bandpower: { delta: number; theta: number; alpha: number; beta: number; gamma: number }
+  nirsDropRate: number
+  emgBurst: boolean
+  preIctalConfidence: number
+}
+```
+
+### 2.2 临床数据结构（v2 新增，必须实现）
+
+> 根据郭老师反馈，临床上最有价值的信息是「发作三段式记录 + 既往史 + 诱因前驱症状」。
+> 数据结构必须能承载完整的、结构化的临床信息。
+
+```typescript
+// src/types/clinical.ts
+
+/** 既往病史 / 术前评估档案 */
+export interface MedicalHistory {
+  patientId: string
+
+  // 既往史（郭老师明确要求的字段）
+  cerebralInfection: BooleanWithDetail   // 脑炎/脑膜炎史
+  headTrauma:        BooleanWithDetail   // 脑外伤史
+  birthInjury:       BooleanWithDetail   // 出生时缺氧/产伤
+  febrileSeizure:    BooleanWithDetail   // 热性惊厥史
+  familyHistory:     BooleanWithDetail   // 癫痫家族史
+
+  // 用药史
+  medications: MedicationRecord[]        // 既往及当前用药
+  drugReactions: string                  // 既往不良反应
+
+  // 发作演变
+  onsetAge: number                       // 首次发作年龄
+  seizureFrequencyHistory: FrequencyPoint[]  // 历年发作频率变化
+  seizureEvolutionNotes: string          // 发作演变文字描述
+
+  // 检查资料
+  examinations: ExamRecord[]             // EEG / MRI / PET-CT 报告与图片
+
+  // 量表
+  questionnaires: QuestionnaireResult[]  // 心理评估量表（QOLIE-31, BDI, NDDI-E等）
+
+  updatedAt: number
+  lockedByDoctor: boolean                // 医生锁定后患者不可改
+}
+
+export interface BooleanWithDetail {
+  value: boolean | 'unknown'
+  detail?: string                        // 例如"5岁时高烧抽搐，持续2分钟"
+  ageAtEvent?: number
+}
+
+export interface MedicationRecord {
+  drugName: string
+  dosage: string
+  startDate: string
+  endDate?: string                       // 当前在服为 undefined
+  effect: 'effective' | 'partial' | 'ineffective' | 'sideeffect'
+  notes: string
+}
+
+export interface ExamRecord {
+  type: 'EEG' | 'MRI' | 'CT' | 'PET-CT' | 'fMRI' | 'Video-EEG' | 'Other'
+  date: string
+  hospital: string
+  conclusion: string
+  attachments: { name: string; url: string }[]   // 本地文件路径或对象 URL
+}
+
+export interface QuestionnaireResult {
+  name: string                          // 'QOLIE-31' | 'BDI' | 'NDDI-E' | ...
+  date: string
+  totalScore: number
+  itemScores: Record<string, number>
+  interpretation: string
+}
+
+/** 三段式发作事件（v2 重点：发作前/中/后必须分别记录） */
+export interface SeizureEvent {
+  id: string
+  patientId: string
+
+  // 基本信息
+  timestamp: number                      // 发作开始时间
+  durationSec: number
+  source: 'algorithm' | 'patient' | 'guardian'   // 谁标记的
+  confirmed: 'unconfirmed' | 'confirmed' | 'rejected'  // 医生复核状态
+
+  // —— 发作前（最重要，郭老师反复强调）——
+  pre: {
+    triggers: TriggerRecord[]            // 结构化诱因（含 AI 追问结果）
+    aura: AuraRecord[]                   // 前驱症状/先兆
+    timeBeforeOnset: number              // 前驱症状出现到发作的间隔（秒）
+  }
+
+  // —— 发作中（症状表现）——
+  ictal: {
+    seizureType: SeizureType             // 发作类型
+    symptoms: string[]                   // 结构化症状标签
+    patientDescription: string           // 患者主观描述（如有意识）
+    witnessDescription: string           // 旁观者/监护人描述
+    videoClipUrl?: string                // 关联视频片段
+    eegSnippetRef?: string               // 关联原始 EEG 片段 ID
+  }
+
+  // —— 发作后 ——
+  post: {
+    state: 'fully_recovered' | 'confused' | 'sleepy' | 'sore' | 'amnesia' | 'todds_paresis'
+    recoveryDurationMin: number
+    notes: string
+  }
+
+  // 当次用药依从性
+  medicationCompliance: {
+    missedDoseLast24h: boolean
+    lastDoseTime?: number
+  }
+
+  // 医生侧字段
+  doctorReview?: {
+    doctorId: string
+    reviewedAt: number
+    annotation: string                   // 医生备注
+    classification: SeizureType          // 医生认定的发作类型
+    relevanceToTreatment: 'high' | 'medium' | 'low'
+  }
+}
+
+export type SeizureType =
+  | 'focal_aware'           // 局灶性意识清醒
+  | 'focal_impaired'        // 局灶性意识障碍
+  | 'focal_to_bilateral'    // 局灶性继发双侧强直阵挛
+  | 'generalized_tonic_clonic'  // 全面性强直阵挛
+  | 'absence'               // 失神
+  | 'myoclonic'             // 肌阵挛
+  | 'atonic'                // 失张力
+  | 'unknown'
+
+/** 诱因记录（含 AI 引导式追问） */
+export interface TriggerRecord {
+  category: TriggerCategory
+  rawInput: string                       // 患者最初的语音/文字输入
+  refinedAnswers: AIFollowUpAnswer[]     // AI 追问后的结构化回答
+  severity: 1 | 2 | 3 | 4 | 5
+}
+
+export type TriggerCategory =
+  | 'sleep_deprivation'    // 睡眠不足
+  | 'emotional_stress'     // 情绪压力
+  | 'missed_medication'    // 漏服药
+  | 'alcohol'              // 饮酒
+  | 'flashing_light'       // 闪光
+  | 'fever'                // 发热
+  | 'menstruation'         // 经期
+  | 'fatigue'              // 劳累
+  | 'other'
+
+export interface AIFollowUpAnswer {
+  question: string                       // AI 提出的追问
+  answer: string                         // 患者回答（语音转文字 or 选项）
+  answerType: 'voice' | 'text' | 'choice'
+}
+
+/** 前驱症状/先兆 */
+export interface AuraRecord {
+  type: AuraType
+  description: string                    // 患者主观描述
+}
+
+export type AuraType =
+  | 'epigastric_rising'    // 上腹部上升感
+  | 'deja_vu'              // 似曾相识
+  | 'jamais_vu'            // 似不相识
+  | 'visual'               // 视觉异常（闪光、光斑）
+  | 'auditory'             // 听觉异常（耳鸣、幻听）
+  | 'olfactory'            // 嗅觉异常
+  | 'gustatory'            // 味觉异常
+  | 'somatosensory'        // 躯体感觉异常（麻木、刺痛）
+  | 'autonomic'            // 自主神经症状（出汗、心慌）
+  | 'fear_anxiety'         // 恐惧、焦虑感
+  | 'unspecified'
+
+/** 医患沟通消息 */
+export interface ChatMessage {
+  id: string
+  patientId: string
+  doctorId: string
+  sender: 'patient' | 'doctor' | 'system'
+  type: 'text' | 'voice' | 'image' | 'event_ref'  // event_ref=引用某次发作
+  content: string
+  attachments?: { type: string; url: string }[]
+  refEventId?: string                    // 当 type=event_ref 时
+  timestamp: number
+  read: boolean
+}
+
+/** 医患通道控制（医生侧权限） */
+export interface ChatChannel {
+  patientId: string
+  doctorId: string
+  status: 'open' | 'closed' | 'readonly'  // 关键：医生可手动开关
+  openedAt?: number
+  closedAt?: number
+  reason?: string                        // 关闭原因（如"已制定治疗方案"）
+}
+
+/** AI 智能小结 */
+export interface AISummary {
+  patientId: string
+  periodStart: number
+  periodEnd: number
+  generatedAt: number
+  modelVersion: string                   // 例如 "EpiNet-Summary-v1.2"
+  highlights: string[]                   // 要点列表
+  detectedPatterns: { pattern: string; confidence: number; suggestion: string }[]
+  medicationAnalysis: string
+  recommendations: string[]
+  draftStatus: 'draft' | 'doctor_approved'  // 必须经医生确认后才能进入正式报告
+}
+```
+
+### 2.3 数据源统一接口（同 v1）
+
+```typescript
+// src/data/IDataSource.ts
+
+export type ConnectionStatus =
+  | 'disconnected' | 'connecting' | 'connected' | 'error' | 'mock'
+
+export interface IDataSource {
+  readonly name: string
+  readonly status: ConnectionStatus
+  connect(config?: Record<string, unknown>): Promise<void>
+  disconnect(): Promise<void>
+  onFrame(callback: (frame: SignalFrame) => void): () => void
+  onStatusChange(callback: (status: ConnectionStatus) => void): () => void
+  onError(callback: (error: Error) => void): () => void
+}
+```
+
+### 2.4 三种数据源实现（同 v1：Mock / WebSocket / Serial / BLE）
+
+```typescript
+// MockAdapter 必须能模拟一个"夜间睡眠监测"场景：
+// - 22:00-06:00 时段，基础 EEG 呈现 NREM/REM 交替波形特征
+// - 03:00 左右触发一次完整发作周期（前驱→发作→恢复）
+// - 触发时自动生成对应的 SeizureEvent，三段式字段全部填充
+//   pre.triggers 包含 "睡眠不足" + AI 追问历史
+//   pre.aura 包含 "上腹部上升感"
+//   ictal.symptoms 包含 ["右上肢强直", "意识丧失", "口角偏斜"]
+//   post.state = 'confused', recoveryDurationMin = 8
+// - 用于在医生端波形回溯页演示完整三段式记录
+```
+
+### 2.5 信号处理管道（同 v1，无变化）
+
+### 2.6 Zustand 全局状态（v2 扩展）
+
+```typescript
+// src/store/index.ts
+
+interface AppStore {
+  // —— 原有字段（同 v1）——
+  dataSource: IDataSource
+  connectionStatus: ConnectionStatus
+  frameBuffer: ProcessedFrame[]
+  latestFrame: ProcessedFrame | null
+  riskState: RiskState
+  riskScore: number
+  events: SeizureEvent[]                // 现在是三段式结构
+  currentUser: User | null
+  currentPortal: 'patient' | 'guardian' | 'doctor'
+  alerts: Alert[]
+  patients: Patient[]
+  settings: AppSettings
+
+  // —— v2 新增 ——
+  medicalHistories: Record<string, MedicalHistory>   // patientId -> history
+  chatMessages: Record<string, ChatMessage[]>         // patientId -> messages
+  chatChannels: Record<string, ChatChannel>           // patientId -> channel
+  aiSummaries: Record<string, AISummary[]>            // patientId -> summaries
+  monitoringMode: 'daytime' | 'sleep' | 'inpatient'   // 监测模式
+  videoClips: VideoClipMeta[]                          // 视频片段元数据
+
+  // 临床操作
+  upsertMedicalHistory: (h: MedicalHistory) => void
+  addSeizureEvent: (e: SeizureEvent) => void
+  updateSeizurePhase: (id: string, phase: 'pre'|'ictal'|'post', patch: object) => void
+  reviewSeizure: (id: string, review: SeizureEvent['doctorReview']) => void
+
+  // 沟通
+  sendChatMessage: (msg: ChatMessage) => void
+  toggleChatChannel: (patientId: string, status: ChatChannel['status'], reason?: string) => void
+
+  // AI 小结
+  generateAISummary: (patientId: string, start: number, end: number) => Promise<AISummary>
+  approveAISummary: (id: string) => void
+
+  // 监测模式
+  setMonitoringMode: (mode: 'daytime' | 'sleep' | 'inpatient') => void
+}
+```
+
+---
+
+## PART 3 · 应用入口与全局布局
+
+### 3.1 Electron 主进程（同 v1，无变化）
+
+### 3.2 全局布局组件
+
+```
+App
+├── LoginScreen
+└── AppShell
+    ├── TitleBar
+    │   ├── Logo + 应用名 + 副标题"家庭监测 · 诊断辅助"
+    │   ├── PortalSwitcher
+    │   ├── MonitoringModeBadge  ← v2 新增：日间监测 / 睡眠监测 / 院内监测
+    │   ├── LiveIndicator
+    │   ├── ConnectionBadge
+    │   └── WindowControls
+    ├── Sidebar
+    │   ├── NavItem × n
+    │   └── CollapseButton
+    └── ContentArea
+        └── <CurrentPage />
+```
+
+### 3.3 标题栏细节
+
+- 副标题文案从「智能癫痫全周期监测」改为「**家庭长程监测 · 诊断辅助**」
+- 新增 **MonitoringModeBadge**：
+  - 日间监测（默认）：浅蓝徽章 ☀
+  - 睡眠监测：深蓝徽章 🌙（启用时主界面色温降低 + 字号略增大）
+  - 院内监测：红色徽章 🏥（仅医院授权账号可见）
+- 点击切换监测模式 → 触发对应模式的提示卡
+
+---
+
+## PART 4 · 登录界面（同 v1，仅文案微调）
+
+- 患者卡片副文案：「个人健康记录 · 智能诱因采集」（弱化"预警"）
+- 监护人卡片副文案：「远程守护 · 视频联动」
+- 医生卡片副文案：「临床档案 · 诊断辅助 · 患者沟通」
+
+---
+
+## PART 5 · 患者端（v2 重大重构）
+
+侧边栏导航项（v2 调整）：
+**实时动态 / 我的档案 / 智能日志 / 发作回顾 / 医生沟通 / 健康课堂**
+
+### 5.1 实时动态页（默认首页，文案重写）
+
+三栏布局保持不变，但**所有"预警"文案重写**：
+
+**左栏：状态球 + SOS**
+
+状态球三态文案调整：
+- safe：「监测中 · 暂无异常」
+- warning：「检测到异常脑电特征 · 已自动记录」← 强调"已记录"，避免暗示医生会立即响应
+- seizure：「正在记录发作过程 · 请保持安全」
+
+状态球下方新增「**回顾性记录**」小字提示：
+> 「设备会持续记录可疑事件。所有标记将在您下次复诊时由医生回顾确认。」
+
+如果当前是「睡眠监测模式」，左栏改为：
+- 月亮图标动画 + 文字「睡眠监测中」
+- 显示已监测时长 + 监测到的事件次数（清晨可查看）
+- 隐藏 SOS（睡眠中不需要）
+
+**中栏：三路实时波形**
+
+> 郭老师反馈：医生看不懂 NIRS，价值有限。EEG 必须是绝对主角。
+
+视觉权重调整：
+- **EEG 图占 50% 高度**（180px），居顶，最显眼，标题加粗
+- NIRS 图占 25% 高度（90px），居中，标题加灰色「（辅助）」标签
+- EMG 图占 25% 高度（90px），居底
+
+每图左侧标签更精确：
+- EEG：「EEG · 8 导联融合视图（主诊断信号）」
+- NIRS：「NIRS · 局部血氧（辅助参考）」
+- EMG：「EMG · 肌电活动」
+
+**右栏：今日摘要**
+
+调整为 5 张卡片：
+1. 今日记录事件数（不再说"发作次数"，改为"可疑事件数"，并附"待医生复核"小字）
+2. 上次事件（时间 + 持续时长 + [查看回顾]按钮）
+3. 服药依从性环形图
+4. 下次服药倒计时
+5. **【v2 新增】与医生通道状态**：
+   - 通道开放：绿色「医生通道开放」+ 未读消息数
+   - 通道关闭：灰色「通道关闭 · 下次复诊时再开启」
+
+**事件记录弹窗（替代原"预警弹窗"）：**
+
+```tsx
+// 当 riskState → warning/seizure 时触发
+// 弹窗顶部彩条变化，但语气从"警报"改为"记录"
+//
+// 内容（warning 时）：
+//   - 检测图标（不再是危险警告，而是记录图标）
+//   - 标题：「检测到异常 · 已记录」
+//   - 副标题：「事件已加入回顾队列，可在【发作回顾】查看」
+//   - 当前 Pre-ictal 置信度 XX%
+//   - 三按钮（替代原二按钮）：
+//     [我有先兆，记录症状] → 跳转 5.3 智能日志的三段式记录
+//     [这是误报] → 反馈算法
+//     [稍后处理] → 关闭，事件保留待回顾
+//
+// 内容（seizure 已发生时，由患者/监护人手动确认后）：
+//   - 弹窗在患者恢复后弹出
+//   - 标题：「检测到一次可疑发作 · 请协助记录」
+//   - 引导式三段式补充表单（前/中/后），见 5.3
+```
+
+---
+
+### 5.2 【v2 新增】我的档案页（既往病史 / 术前评估）
+
+> 这是 v1 完全缺失、郭老师强调必须有的页面。
+> 整合既往病史、检查报告、用药史、量表评估，作为患者的完整临床档案基础。
+
+**布局：左侧分章导航 + 右侧表单区**
+
+```
+┌─────────────────┬────────────────────────────────────┐
+│ 1. 基本信息      │  [当前章节标题 · 完成度 65%]         │
+│ 2. 既往疾病史 ⚠ │                                    │
+│ 3. 用药记录      │  ┌──────────────────────────────┐ │
+│ 4. 发作演变      │  │  表单内容                     │ │
+│ 5. 检查报告      │  │                              │ │
+│ 6. 心理量表      │  └──────────────────────────────┘ │
+│                 │                                    │
+│ [□ 申请医生锁定] │  [上一节]                [下一节] │
+└─────────────────┴────────────────────────────────────┘
+```
+
+#### 5.2.1 章节内容（严格按郭老师要求实现）
+
+**章节 2：既往疾病史（必填）**
+- 脑炎 / 脑膜炎：是 / 否 / 不确定 + 详情文本框（"几岁、持续多久、医院"）
+- 脑外伤：是 / 否 / 不确定 + 详情
+- 出生时缺氧 / 产伤：是 / 否 / 不确定 + 详情
+- **热性惊厥史**（郭老师明确强调）：是 / 否 / 不确定 + 详情
+- 癫痫家族史：是 / 否 / 不确定 + 详情（哪位亲属，何种类型）
+
+每个字段右侧有 ⓘ 图标，点击展开科普说明（例如"什么是热性惊厥？"）。
+
+**章节 3：用药记录**
+- 列表式，每条用药条目支持：药名、剂量、起止日期、效果评估、不良反应
+- 顶部「+ 添加用药」按钮
+- 当前在服药物用绿色标识，已停药物灰色
+- 支持「同步至生活日志的服药打卡」
+
+**章节 4：发作演变**
+- 首次发作年龄（数字输入）
+- 发作频率历史变化：年份 → 大致频率（每月X次），用 Recharts 折线图呈现
+- 发作演变文字描述（多行文本）
+
+**章节 5：检查报告**
+- 卡片网格：每张卡片显示一次检查
+- 类型标签：EEG / 脑电图 / MRI / CT / PET-CT / fMRI / 视频脑电
+- 支持本地文件上传（PDF / JPG / DCM），附件名 + 文件大小
+- 上传后缩略图预览
+- 关键字段：日期、医院、医生结论摘要
+
+**章节 6：心理量表**
+- 推荐量表列表：QOLIE-31（生活质量）、BDI（贝克抑郁）、NDDI-E（癫痫专用抑郁筛查）、HAMA（焦虑）
+- 点击量表 → 抽屉打开，逐题作答（单选 Likert 量表）
+- 完成后自动计算总分 + 解释（"轻度抑郁"等）
+- 历史得分趋势线图
+
+#### 5.2.2 医生锁定机制
+
+档案页右下角「申请医生锁定」按钮：
+- 患者完成填写后申请锁定
+- 医生端审核确认后，档案变为只读
+- 锁定后档案在医生端患者档案中以"已锁定"徽章显示
+
+---
+
+### 5.3 智能日志页（重构原"生活日志"，引入 AI 引导式追问）
+
+> 郭老师反馈：患者说"心情不好""昨晚没睡好"对医生没意义，需要 AI 追问细节（几点睡、怎样心情不好、有无特定事件）。
+
+**整体布局**：左侧时间轴（同 v1）+ 右侧**对话式记录区**（替代原快速表单）
+
+#### 5.3.1 AI 引导式诱因记录（核心创新）
+
+右侧从静态表单升级为**对话式 UI**：
+
+```
+┌─────────────────────────────────────────────────────┐
+│  🧠 灵犀助手                          [文字 | 🎤语音] │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  💬 助手：今天感觉怎么样？有什么想记录的吗？           │
+│                                                     │
+│                              👤 用户（语音）：       │
+│                              「昨晚没睡好，今天心情也不太好」│
+│                                                     │
+│  💬 助手：好的，我帮你详细记录一下。                  │
+│           关于睡眠 —— 昨晚你大约几点上床？           │
+│           [🎤 长按说话]  [22:00]  [23:00]  [00:00 之后]│
+│                                                     │
+│                              👤 用户：「快十二点了」 │
+│                                                     │
+│  💬 助手：明白。中途有醒来吗？大约睡了多久？          │
+│           [🎤 长按说话]  [3-4h]  [4-6h]  [6-8h]      │
+│                                                     │
+│  ...（继续追问情绪相关）                              │
+│                                                     │
+│  ✅ 已自动结构化：                                   │
+│     • 睡眠不足（严重）：就寝 23:50，睡眠 4.5h        │
+│     • 情绪低落（中度）：工作压力相关                  │
+│                                                     │
+│           [确认保存]   [继续补充]                    │
+└─────────────────────────────────────────────────────┘
+```
+
+**实现要求**：
+1. **追问决策树**（hard-coded，但形式上像 AI）：
+   - 关键词识别 → 命中诱因类别 → 进入对应追问流程
+   - 每个 TriggerCategory 准备一套追问脚本（至少 3-5 个问题）
+   - 示例：
+     - 「睡眠不足」→ 追问就寝时间、起床时间、中途觉醒、入睡难易、白天补觉
+     - 「情绪压力」→ 追问情绪类型（焦虑/愤怒/低落）、持续时长、触发事件、强度1-5
+     - 「漏服药」→ 追问漏服的药物名、漏服时段（早/中/晚）、漏服天数
+     - 「饮酒」→ 追问类型、量、时间
+     - 「闪光」→ 追问来源（屏幕/阳光/灯光）、持续时长
+     - 「发热」→ 追问体温、持续时间、是否服药
+2. **每个问题至少提供 3 个快捷选项 + 语音/文字自由回答**（移动端友好，但桌面端同样支持）
+3. **语音识别**：使用 Web Speech API，识别中文，识别失败时回退到文字输入
+4. **可视化进度**：右上角"已记录维度 X / Y"
+5. **结构化输出**：会话结束后自动生成 `TriggerRecord` 对象写入当前事件 / 生活日志
+
+#### 5.3.2 三段式发作记录（关键）
+
+当用户从实时动态页点击「记录症状」或主动选择「记录一次发作」时，进入**三段式表单流程**（步骤条 UI）：
+
+```
+[第 1 步 · 发作前]  →  [第 2 步 · 发作中]  →  [第 3 步 · 发作后]
+   ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━○━━━━━━━━━━━━━━━━━━━━━○
+```
+
+**第 1 步 · 发作前**
+- 诱因（链接到 5.3.1 AI 追问流程）
+- 前驱症状/先兆（AuraType 多选 chip）
+  - 上腹部上升感
+  - 似曾相识感（déjà vu）
+  - 视觉异常（闪光、光斑、视野变化）
+  - 听觉异常
+  - 嗅觉/味觉异常
+  - 麻木、刺痛
+  - 心慌、出汗
+  - 恐惧、焦虑
+  - 其他（自由文本）
+- 先兆出现到发作的间隔（秒数 / "不到 1 分钟" / "1-5 分钟" / "5 分钟以上"）
+- 每个先兆类型选中后可补充文字描述
+
+**第 2 步 · 发作中**
+- 发作类型（SeizureType 单选，附图示）：
+  - 局灶性意识清醒（部分性，意识保留）
+  - 局灶性意识障碍（部分性，意识受损）
+  - 局灶性继发双侧强直阵挛
+  - 全面性强直阵挛（俗称"大发作"）
+  - 失神（短暂愣神）
+  - 肌阵挛（短暂抽动）
+  - 失张力（突然瘫倒）
+  - 不确定（让医生判断）
+- 症状结构化标签（多选 chip）：
+  - 意识丧失 / 意识模糊 / 意识清醒
+  - 强直 / 阵挛 / 强直阵挛 / 自动症
+  - 右上肢 / 左上肢 / 右下肢 / 左下肢 / 全身
+  - 口角偏斜 / 凝视 / 双眼上翻
+  - 失语 / 言语不清
+  - 大小便失禁 / 舌咬伤
+- 患者主观描述（如有意识，文本框）
+- 旁观者描述（监护人填写，文本框）
+- 关联视频（自动从监护人端视频联动调取）
+
+**第 3 步 · 发作后**
+- 发作后状态（单选）：
+  - 完全恢复
+  - 意识模糊（持续时间 _ 分钟）
+  - 嗜睡 / 想睡
+  - 肌肉酸痛
+  - 记忆缺失
+  - Todd 麻痹（一侧肢体无力）
+- 恢复时长（分钟）
+- 当日用药情况：过去 24h 是否漏服 / 上次服药时间
+- 备注文本
+
+**提交后**：生成完整 `SeizureEvent` 对象，标记为 `source: 'patient'`, `confirmed: 'unconfirmed'`，等待医生复核。
+
+#### 5.3.3 普通日常记录（保留 v1 快速表单）
+
+时间轴下方有「快速打卡」入口（与三段式入口分离）：
+- 服药打卡（早/中/晚 toggle）
+- 睡眠时长滑块
+- 情绪 emoji
+- 自定义文字
+
+---
+
+### 5.4 【v2 新增】发作回顾页
+
+> 替代/扩展原"事件查看"功能，让患者可以回顾自己的事件历史，理解模式。
+
+**布局**：上部时间筛选 + 中部事件列表 + 右抽屉详情
+
+事件列表每行：
+```
+[日期 时间] [发作类型徽章] [持续时长] [医生复核状态] [→]
+2025-01-15 03:42  局灶性意识障碍  2m14s  ✓ 已复核    [查看]
+2025-01-12 22:30  可疑事件        45s    ⏱ 待医生复核
+```
+
+点击 → 右侧抽屉打开，显示：
+- 三段式记录回顾（前 / 中 / 后三个小卡片）
+- 关联的简化波形缩略图（静态，引导提示"完整波形请在下次复诊时与医生一同查看"）
+- 该事件的诱因雷达图（如填写完整）
+- 医生备注（如已复核）
+
+患者**不允许**修改医生复核字段，但可以追加补充描述。
+
+---
+
+### 5.5 【v2 新增】医生沟通页
+
+> 郭老师反馈：必须是**轻量级、可控**的双向沟通。医生端可手动开启/关闭。
+
+**入口**：当 chatChannel.status === 'open' 时显示完整聊天 UI；否则显示提示卡：
+```
+┌─────────────────────────────────────────────┐
+│  ✉  医生沟通通道当前关闭                      │
+│                                             │
+│  您可以将想咨询的内容记录在【智能日志】，      │
+│  我们会在您下次复诊时由医生回顾。              │
+│                                             │
+│  如有紧急情况，请前往最近的医院急诊。          │
+└─────────────────────────────────────────────┘
+```
+
+通道开启时的聊天 UI：
+- 类似 IM 但极简
+- 支持文本 / 语音 / 图片
+- **关键能力：引用事件**：消息可附带 SeizureEvent 引用卡片（"关于我 01-15 03:42 那次发作"）
+- 头部显示「医生 · 在线/离线」+ 「通道由 张医生 开启于 2025-01-10」
+- 消息气泡色：医生 = `--chat-bubble-doctor`，患者 = `--chat-bubble-patient`
+- 不支持音视频通话（轻量级原则）
+- 不支持已读回执（避免压力）
+- 顶部明显提示：「**本通道非紧急通道，紧急情况请拨打 120**」
+
+---
+
+### 5.6 健康课堂页（同 v1）
+
+保留 3 列卡片网格设计。
+预置文章新增 2 篇：
+- 「如何向医生描述你的发作」（教患者使用三段式记录）
+- 「居家长程脑电监测：你需要知道的」（管理预期）
+
+---
+
+## PART 6 · 监护人端（v2 增强：视频联动）
+
+侧边栏：远程监控 / 视频联动 / 报警设置 / 历史轨迹
+
+### 6.1 远程监控页（同 v1 + 调整）
+
+患者状态大卡：文案从"远程实时守护"改为「**远程关注 · 事件回顾**」。
+
+新增「监测模式」徽章显示当前是日间还是睡眠监测。
+
+历史报警列表：增加列「视频关联」（▶ 有 / — 无）。
+
+### 6.2 【v2 新增】视频联动页
+
+> 郭老师反馈：「理想场景：预警触发卧室视频记录，形成'家庭简易脑电监测单元'」
+
+**布局**：
+
+```
+┌────────────────────────────────────────────────────┐
+│  视频联动 · 卧室摄像头                              │
+│  状态：● 已连接  ·  联动模式：异常事件自动录制       │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│   ┌──────────────────────────────┐                 │
+│   │                              │   ┌──────────┐  │
+│   │  实时画面（夜视）              │   │ 录制设置  │  │
+│   │  ◉ REC                       │   │          │  │
+│   │  03:42:18                    │   │ □ 自动联动│  │
+│   │                              │   │ □ 持续录制│  │
+│   └──────────────────────────────┘   │ 提前 30s  │  │
+│                                      │ 延后 5min │  │
+│                                      └──────────┘  │
+│                                                    │
+│  ── 已保存的事件视频片段（最近 7 天）──              │
+│  ▶ 2025-01-15 03:42  局灶性发作  2m14s  [回放][删除]│
+│  ▶ 2025-01-12 22:30  可疑事件    1m08s  [回放][删除]│
+└────────────────────────────────────────────────────┘
+```
+
+**核心功能**：
+1. **接入摄像头**：通过 Electron `desktopCapturer.getSources()` 或 USB / IP 摄像头（Mock 模式下用预置 mp4 演示）
+2. **自动联动**：当 `riskState` 变为 `warning` 或 `seizure` 时，自动启动录制；记录"提前 30s + 实际事件 + 延后 5min"
+3. **视频片段元数据**：每个片段关联对应 `SeizureEvent`，可在事件回顾、医生端波形回溯中调取
+4. **隐私保护**：所有视频存储在本地，监护人可手动删除；提供「打码模式」（人脸自动模糊，使用 Canvas 简单实现，演示即可）
+5. **回放**：在视频右侧同步显示该时段的 EEG 缩略波形（实现"视频 + EEG 同步回放"）
+
+### 6.3 报警系统（语气调整）
+
+低级 / 高级报警保留，但文案从「警报」改为「事件通知」：
+- 标题从「⚠ 高危警报」改为「⚠ 检测到发作事件 · 已联动录制」
+- 红色弹窗按钮：
+  - [▶ 立即查看视频]（替代"一键导航"，更贴合家庭场景）
+  - [✓ 已确认]
+
+**注意**：保留"一键导航"作为可选按钮（如果是外出场景）。
+
+### 6.4 历史轨迹页（同 v1 + 视频缩略图）
+
+事件展开后，除了 EEG 缩略图，额外加入视频帧缩略图（如有联动录制）。
+
+---
+
+## PART 7 · 医生端（v2 重大重构）
+
+侧边栏：**患者档案中心 / 病情热力图 / 波形回溯 / AI 智能小结 / 医患沟通 / 报告生成**
+
+### 7.1 患者档案中心（替代原"患者管理"）
+
+> 郭老师反馈：医生端应当有"患者个人档案：整合既往所有资料，开始使用设备后所有数据归入统一档案"。
+
+**布局**：左侧患者列表（同 v1 表格，简化为窄列）+ 右侧选中患者的完整档案视图
+
+**左侧患者列表**（窄列，280px）：
+- 搜索框 + 风险等级筛选
+- 列表项：头像 + 姓名 + 年龄 + 风险徽章 + 未读消息红点
+- 默认按风险降序
+
+**右侧档案视图**：
+
+```
+┌──────────────────────────────────────────────────────┐
+│  李明 · 男 · 34岁                                     │
+│  [档案完整度: 87%]  [已锁定 v1.2]  [● 通道开启]       │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  Tab: [概览] [既往史] [用药] [检查] [量表] [事件历史] │
+│                                                      │
+│  ── 概览 ──                                          │
+│                                                      │
+│  ┌─ 基本信息 ─┐  ┌─ 当前用药 ─┐  ┌─ 近 30 日 ─┐    │
+│  │ 首发年龄 16 │  │ 拉莫三嗪    │  │ 事件 7 次   │    │
+│  │ 病程 18 年  │  │ 200mg bid   │  │ 依从 91%    │    │
+│  └────────────┘  └────────────┘  └────────────┘    │
+│                                                      │
+│  ── 既往史摘要 ──                                    │
+│  • 热性惊厥史：是（5 岁，持续约 2 分钟）              │
+│  • 脑炎史：否                                        │
+│  • 头部外伤：否                                      │
+│  • 家族史：否                                        │
+│                                                      │
+│  ── 最近事件 ──（3 条，含三段式预览）                 │
+│  ┌────────────────────────────────────────────┐    │
+│  │ 2025-01-15 03:42  局灶性意识障碍            │    │
+│  │ 前：睡眠不足（4.5h）+ 上腹部上升感           │    │
+│  │ 中：右上肢强直 · 意识丧失 · 2m14s            │    │
+│  │ 后：意识模糊 8min                            │    │
+│  │ [完整回顾]  [复核 →]                         │    │
+│  └────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────┘
+```
+
+**关键交互**：
+- Tab 切换时 Framer Motion 滑动过渡
+- 「既往史」Tab：与患者端 5.2 章节内容一一对应的只读视图，医生可添加备注（医生备注覆盖在患者填写之上，黄色高亮）
+- 「检查」Tab：所有上传的 EEG/MRI/PET-CT 报告，可点击预览（PDF inline / 图片 lightbox）
+- 「量表」Tab：所有问卷得分的历史趋势线图（Recharts）
+- 「事件历史」Tab：链接到 7.3 波形回溯（带患者上下文）
+- 顶部「档案锁定」按钮：医生审核完毕后锁定档案版本（生成 v1.0, v1.1...）
+
+### 7.2 病情热力图（同 v1，无变化）
+
+保留所有 D3 实现细节。
+底部"模式分析条"现在改为引用 AI 智能小结模块的结果。
+
+### 7.3 波形回溯页（v2 重大调整）
+
+> 郭老师反馈：「原始脑电必须要有；近红外信号我们不太懂，不会看；患者自己的感受描述和旁人观察到的表现也非常需要；算法标注+原始 EEG 的可视化报告蛮有意思」
+
+**布局调整**：从"三路波形 1:1:1" 调整为「**EEG 主显 + 折叠的 NIRS/EMG + 症状描述面板**」
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  时间轴导航条（同 v1）                                     │
+├────────────────────────────────────┬─────────────────────┤
+│                                    │                     │
+│  EEG · 8 导联（主诊断信号）         │   症状描述面板        │
+│  ┌────────────────────────────┐    │   ┌───────────────┐ │
+│  │                            │    │   │ 三段式记录     │ │
+│  │  D3 Canvas，占主视图 60% 高 │    │   │               │ │
+│  │  显著大，所有注解层都在此    │    │   │ 【发作前】     │ │
+│  │                            │    │   │ 诱因：睡眠不足 │ │
+│  └────────────────────────────┘    │   │ 先兆：上腹上升 │ │
+│                                    │   │ 间隔：~30s     │ │
+│  ▼ NIRS · 局部血氧（辅助参考）      │   │               │ │
+│  ┌────────────────────────────┐    │   │ 【发作中】     │ │
+│  │  默认折叠为缩略条，点击展开  │    │   │ 类型：局灶性   │ │
+│  └────────────────────────────┘    │   │       意识障碍 │ │
+│                                    │   │ 症状：右上肢   │ │
+│  ▼ EMG · 肌电                      │   │       强直     │ │
+│  ┌────────────────────────────┐    │   │ 患者：「感觉胃 │ │
+│  │  默认折叠为缩略条           │    │   │ 部往上翻……」  │ │
+│  └────────────────────────────┘    │   │ 旁观：「右臂   │ │
+│                                    │   │ 突然抬起……」  │ │
+│                                    │   │               │ │
+│                                    │   │ 【发作后】     │ │
+│                                    │   │ 意识模糊 8min  │ │
+│                                    │   └───────────────┘ │
+│                                    │                     │
+│                                    │   ▶ 视频联动        │
+│                                    │   [播放卧室视频]    │
+│                                    │                     │
+│                                    │   ── 特征参数 ──   │
+│                                    │   各频段功率条形图  │
+│                                    │   置信度曲线        │
+└────────────────────────────────────┴─────────────────────┘
+
+底部操作栏：
+[标记伪迹] [确认有效发作] [修改置信度] [添加备注] [导出此段]
+[← 上一事件]  [事件 3/12]  [下一事件 →]   [✓ 完成复核]
+```
+
+**关键设计点**：
+1. **EEG 在视觉权重上是绝对主角**（占主视图 60% 以上高度），其他信号默认折叠
+2. **症状描述面板（右侧）是固定显示的核心模块**——这是郭老师反复强调的
+3. **视频联动**：如该事件关联视频，面板内提供播放按钮，点击后弹出小窗与 EEG 同步回放
+4. **算法标注**：保留 v1 的红色矩形（发作）+ 黄色虚线（伪迹），右键菜单同 v1
+5. **复核工作流**：底部「确认有效发作 / 标记伪迹 / 修改置信度」三按钮一键完成复核，并支持事件间快速跳转
+6. **NIRS 默认折叠**：避免在医生主视图占据空间，需要时点击展开
+
+### 7.4 【v2 新增】AI 智能小结页
+
+> 郭老师反馈：「结合原有资料自动生成建议或小结，肯定可以的」。
+> 关键：必须经医生确认后才能进入正式报告（医生权威）。
+
+**布局**：
+
+```
+┌──────────────────────────────────────────────────────┐
+│  患者：李明     周期：[2025-01-09] → [2025-01-15]    │
+│                                          [生成小结] │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  ┌─ AI 生成小结（草稿）──────── EpiNet-Summary-v1.2 ─┐│
+│  │                                                  ││
+│  │ 要点                                             ││
+│  │ • 本周共记录 7 次可疑事件，其中 5 次经患者确认。  ││
+│  │ • 发作集中在凌晨 02:00-05:00，提示睡眠相关性。    ││
+│  │ • 5 次发作中 4 次存在睡眠不足诱因（<6h）。       ││
+│  │ • 服药依从性 91%，1 次漏服晚间剂量。             ││
+│  │                                                  ││
+│  │ 模式检测                                         ││
+│  │ ▸ 睡眠型癫痫倾向（置信度 87%）                   ││
+│  │   建议：评估晚间用药时间，考虑加强夜间监测。      ││
+│  │ ▸ 漏服-发作关联（置信度 73%）                    ││
+│  │   建议：启用每日服药提醒。                       ││
+│  │                                                  ││
+│  │ 用药分析                                         ││
+│  │ 当前拉莫三嗪 200mg bid，本周发作仍较频繁。       ││
+│  │ 建议下次复诊评估剂量或考虑联合用药。              ││
+│  │                                                  ││
+│  │ ⚠ 这是 AI 生成的草稿，必须由您审核确认。         ││
+│  │                                                  ││
+│  │ [✎ 编辑]  [✓ 确认采纳]  [✕ 弃用]  [↻ 重新生成]  ││
+│  └──────────────────────────────────────────────────┘│
+│                                                      │
+│  ── 历史小结 ──                                      │
+│  • 2025-01-08  [医生已采纳]  查看 ↗                  │
+│  • 2025-01-01  [医生已采纳]  查看 ↗                  │
+└──────────────────────────────────────────────────────┘
+```
+
+**实现要求**：
+- 「生成小结」按钮触发：基于该周期内的事件、既往档案、量表得分、依从性数据，生成结构化文本
+- Mock 模式下使用预置模板填空生成
+- 草稿状态明显（橙色边框 + ⚠ 提示）
+- 医生确认后变为绿色 ✓，状态锁定，可被报告生成器引用
+- 支持医生编辑：右侧打开富文本编辑器，支持加粗、列表
+
+### 7.5 【v2 新增】医患沟通模块
+
+> 郭老师反馈：「轻量级肯定够了……肯定可以沟通，同时可控。」
+
+**布局**：左侧患者会话列表 + 右侧聊天窗口
+
+```
+┌─────────────────┬─────────────────────────────────┐
+│ 患者会话         │  李明 · ● 通道开启 (3 天前)       │
+│                 │                  [关闭通道] [...]│
+│ 🔵 李明      3   │                                 │
+│    "想问关于..."│  ┌─────────────────────────────┐│
+│                 │  │                             ││
+│ ⚪ 王芳         │  │  患者：医生您好，我昨晚的     ││
+│ ──── 已关闭 ────│  │  事件比之前严重一些...        ││
+│                 │  │                             ││
+│ ⚪ 张伟         │  │  [📎 关联事件: 01-15 03:42] ││
+│ ──── 已关闭 ────│  │                             ││
+│                 │  │  医生：收到。我看了波形和    ││
+│                 │  │  视频，确实是局灶性意识      ││
+│                 │  │  障碍。建议本周内复诊...     ││
+│                 │  │                             ││
+│                 │  └─────────────────────────────┘│
+│                 │                                 │
+│                 │  [输入消息...]    [📎] [🎤] [发送]│
+└─────────────────┴─────────────────────────────────┘
+```
+
+**关键功能（按郭老师要求实现）**：
+
+1. **通道可控开关**（最重要的设计点）：
+   - 每个患者一个独立通道，状态 open / closed / readonly
+   - 右上角「关闭通道」按钮：弹出确认对话框，需选择/输入关闭原因（如"已制定治疗方案"、"已转诊"、"复诊后"）
+   - 关闭后：患者端显示"通道关闭"提示，无法发送消息
+   - readonly 状态：双方可查看历史消息但不可新增（用于过渡期）
+
+2. **关联事件引用**：
+   - 输入框旁「📎」按钮，弹出该患者的事件列表，选择一条作为消息附件
+   - 消息中显示事件卡片，点击 → 跳转波形回溯页
+
+3. **轻量级原则**：
+   - 不支持音视频通话
+   - 不支持已读回执（避免医生压力）
+   - 不支持表情包（保持专业）
+   - 支持文本、语音消息、图片
+
+4. **批量管理**：
+   - 列表顶部「批量关闭非活跃通道」按钮（30 天无消息的通道一键关闭）
+   - 列表筛选：开放通道 / 已关闭通道 / 全部
+
+5. **新消息通知**：
+   - 患者档案中心、侧边栏均显示未读红点
+   - 系统消息（如"患者完成档案锁定申请"）独立于聊天
+
+### 7.6 报告生成器（v2 增强）
+
+左右双栏（40% / 60%），在 v1 基础上**大幅扩展报告字段**。
+
+**左栏配置区新增章节**：
+```
+包含章节     ☑ 患者基本信息
+             ☑ 既往病史摘要                  ← v2 新增
+             ☑ 当前用药与依从性               ← v2 新增
+             ☑ 心理量表得分                  ← v2 新增
+             ☑ 发作次数统计
+             ☑ 发作时间分布（热力图截图）
+             ☑ 三段式发作详情（每次事件）    ← v2 新增
+             ☑ 原始 EEG 关键片段截图         ← v2 新增
+             ☑ AI 智能小结（医生已确认）     ← v2 新增
+             ☑ 医生最终评估                  ← v2 新增
+             ☐ 完整波形附录
+             ☐ 视频联动关键帧                ← v2 新增
+
+报告类型     [● 周报]  [○ 月报]  [○ 复诊前总结报告]
+```
+
+**右栏实时预览**：所有新章节实时反映在 PDF 预览中。
+
+报告样式：医院级专业版式，含医院 logo 占位、医生签名、患者编号、生成日期。
+
+**导出后**：自动归档至患者档案，可在「患者档案中心 → 概览」直接查看历次报告。
+
+---
+
+## PART 8 · Settings 页面（v2 扩展）
+
+分区卡片式布局：
+
+**数据源配置**（同 v1）
+
+**监测模式**（v2 新增）
+```
+○ 日间监测（默认）
+○ 睡眠监测   (启用夜间专属算法 + 视频联动 + 静默通知)
+○ 院内监测   (启用实时预警 + 医务人员通知)
+
+睡眠监测时段     [22:00] ~ [07:00]
+```
+
+**视频联动**（v2 新增）
+```
+摄像头来源       [○ 内置摄像头]  [○ USB 摄像头]  [● IP 摄像头]
+IP 摄像头地址    [rtsp://_________________]
+自动联动         [● 开]
+事件前预录       [ 30 ] 秒
+事件后续录       [  5 ] 分钟
+人脸打码         [○ 开]  [● 关]
+本地保留天数     [ 30 ] 天（之后自动删除）
+```
+
+**语音识别**（v2 新增）
+```
+启用语音输入     [● 开]
+识别语言         [中文 (zh-CN) ▼]
+长按触发         [● 是]  [○ 点击切换]
+```
+
+**信号处理参数**（同 v1）
+
+**通知配置**（同 v1）
+
+**医患沟通**（v2 新增）
+```
+新消息提示       [● 桌面通知]  [● 应用内角标]
+非工作时间静默   [22:00] ~ [08:00]
+默认通道策略     [○ 新患者自动开启]  [● 手动开启]
+```
+
+**系统信息**（同 v1）
+
+---
+
+## PART 9 · 全局组件
+
+### 9.1 通知系统（同 v1）
+
+### 9.2 紧急覆盖层（v2 调整：仅院内监测模式启用全屏覆盖）
+
+```tsx
+// monitoringMode === 'inpatient' 时：保留 v1 的全屏覆盖行为
+// monitoringMode === 'sleep' / 'daytime' 时：
+//   降级为右上角持久 Toast（不全屏覆盖），文案"事件已记录"
+//   理由：居家场景下全屏覆盖打扰睡眠/日常活动，且医生无法实时响应
+```
+
+### 9.3 Mock 数据标识条（同 v1）
+
+### 9.4 【v2 新增】通道状态徽章
+
+医生端 / 患者端均显示当前医患通道状态：
+- 开放：绿色 ● 「通道开启」
+- 关闭：灰色 ○ 「通道关闭」
+- 只读：黄色 ⊙ 「只读模式」
+
+### 9.5 【v2 新增】发作记录引导横幅
+
+当 algorithm 检测到一次新的事件但未完成三段式记录时，在患者端实时动态页顶部显示：
+```
+┌──────────────────────────────────────────────────┐
+│ 📝 检测到一次事件待补充记录                       │
+│    花 2 分钟描述发作前后情况，有助于医生准确诊断   │
+│                                  [立即记录] [稍后] │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+## PART 10 · 动画与微交互规范（同 v1，新增）
+
+```
+原有动画规范全部保留。新增：
+
+三段式表单步进:   步骤条用 Framer Motion layoutId 跟随动画
+                  Tab 之间内容 slide + fade 切换
+AI 对话气泡:      新消息从底部 fade-up 进入，spring
+                  AI 正在输入: 三个圆点 wave 动画
+语音录制:         按住状态 → 麦克风图标周围红色环形脉冲
+                  释放 → 波形可视化后 collapse 为消息气泡
+通道开关:         绿/灰徽章状态切换 300ms color transition
+                  关闭通道时 → 聊天区淡灰化 + 输入框禁用动画
+档案锁定:         "锁定"按钮按下 → 出现挂锁动画 + 全档案灰边
+NIRS 折叠展开:    高度 90px ↔ 24px(缩略条) ease-in-out 200ms
+视频联动启动:     REC 红点 fade-in + 闪烁
+```
+
+---
+
+## PART 11 · 项目文件结构（v2 扩展）
+
+```
+lingxi-miaodao/
+├── electron/
+│   ├── main.ts
+│   └── preload.ts
+├── src/
+│   ├── types/
+│   │   ├── signal.ts
+│   │   ├── events.ts
+│   │   ├── user.ts
+│   │   └── clinical.ts            ← v2 新增（MedicalHistory, SeizureEvent三段式等）
+│   ├── data/
+│   │   ├── IDataSource.ts
+│   │   ├── SignalProcessor.ts
+│   │   └── adapters/
+│   │       ├── MockAdapter.ts
+│   │       ├── WebSocketAdapter.ts
+│   │       ├── SerialAdapter.ts
+│   │       └── BLEAdapter.ts
+│   ├── ai/                        ← v2 新增
+│   │   ├── TriggerInterview.ts    ← AI 引导式追问决策树
+│   │   ├── triggerScripts/        ← 各诱因的追问脚本
+│   │   │   ├── sleep.ts
+│   │   │   ├── mood.ts
+│   │   │   ├── medication.ts
+│   │   │   └── ...
+│   │   ├── SummaryGenerator.ts    ← AI 智能小结生成
+│   │   └── SpeechRecognition.ts   ← Web Speech API 封装
+│   ├── store/
+│   │   └── index.ts
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── TitleBar.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── PortalSwitcher.tsx
+│   │   │   ├── MonitoringModeBadge.tsx   ← v2 新增
+│   │   │   └── AppShell.tsx
+│   │   ├── charts/
+│   │   │   ├── WaveformChart.tsx
+│   │   │   ├── SeizureHeatmap.tsx
+│   │   │   └── StatsCharts.tsx
+│   │   ├── clinical/              ← v2 新增
+│   │   │   ├── ThreePhaseRecorder.tsx     ← 三段式表单
+│   │   │   ├── AIInterviewChat.tsx        ← AI 对话式记录
+│   │   │   ├── SymptomDescriptionPanel.tsx ← 症状描述面板
+│   │   │   ├── MedicalHistoryForm.tsx
+│   │   │   └── QuestionnaireRunner.tsx
+│   │   ├── chat/                  ← v2 新增
+│   │   │   ├── ChatWindow.tsx
+│   │   │   ├── ChannelToggle.tsx
+│   │   │   ├── EventReferenceCard.tsx
+│   │   │   └── VoiceMessage.tsx
+│   │   ├── video/                 ← v2 新增
+│   │   │   ├── VideoPlayer.tsx
+│   │   │   ├── VideoEEGSyncView.tsx
+│   │   │   └── CameraSetup.tsx
+│   │   ├── StatusOrb.tsx
+│   │   ├── SOSButton.tsx
+│   │   ├── EmergencyOverlay.tsx
+│   │   ├── AlertToast.tsx
+│   │   ├── ArtifactBanner.tsx
+│   │   ├── MockModeBanner.tsx
+│   │   ├── RecordPromptBanner.tsx ← v2 新增
+│   │   └── ChannelStatusBadge.tsx ← v2 新增
+│   ├── portals/
+│   │   ├── patient/
+│   │   │   ├── LiveDashboard.tsx
+│   │   │   ├── MyProfile.tsx       ← v2 新增（替代原 LifeLog 的一部分）
+│   │   │   ├── SmartLog.tsx        ← v2 重构（替代 LifeLog）
+│   │   │   ├── SeizureReview.tsx   ← v2 新增
+│   │   │   ├── DoctorChat.tsx      ← v2 新增
+│   │   │   └── HealthClass.tsx
+│   │   ├── guardian/
+│   │   │   ├── RemoteMonitor.tsx
+│   │   │   ├── VideoLink.tsx       ← v2 新增
+│   │   │   ├── AlertSystem.tsx
+│   │   │   └── HistoryTrack.tsx
+│   │   └── doctor/
+│   │       ├── PatientArchiveCenter.tsx   ← v2 重构（替代 PatientManagement）
+│   │       ├── SeizureHeatmapPage.tsx
+│   │       ├── WaveformReview.tsx          ← v2 调整布局（EEG主导+症状面板）
+│   │       ├── AISummaryPage.tsx           ← v2 新增
+│   │       ├── DoctorChatCenter.tsx        ← v2 新增
+│   │       └── ReportGenerator.tsx         ← v2 扩展
+│   ├── pages/
+│   │   ├── LoginScreen.tsx
+│   │   └── SettingsPage.tsx
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+└── tsconfig.json
+```
+
+---
+
+## PART 12 · 交付要求
+
+1. **完整可运行代码**，`npm install && npm run dev` 后直接启动 Electron 窗口
+2. **Mock 模式开箱即用**，无需任何硬件即可完整演示所有功能
+3. **D3 波形图和热力图必须真正实现**，不可用静态图片替代
+4. **实时数据引擎必须工作**，波形图看得到实时滚动的曲线
+5. **三端切换完整**，每个端口的所有页面均可正常导航
+6. **数据源接口完整实现**，WebSocket / Serial / BLE adapter 骨架代码完整
+7. **TypeScript 严格类型**，零 `any`，零 `@ts-ignore`
+8. **AI 引导式追问决策树必须真正实现**（至少 4 个完整诱因脚本），可用一个简单的 状态机 + 关键词匹配，不要求接入大模型，但形式上要像 AI 对话
+9. **三段式发作记录表单必须完整实现**，所有字段可填可保存
+10. **既往病史模块必须完整实现**，所有郭老师要求的字段（脑炎/脑外伤/出生时问题/热性惊厥）一个不能少
+11. **医患沟通通道可控开关必须实现**，演示时可看到医生关闭→患者端立刻切换为关闭态
+12. **波形回溯页 EEG 必须为主视觉**，症状描述面板必须固定显示，NIRS 默认折叠
+13. **视频联动必须实现**（Mock 模式下用占位视频片段），并支持视频 + EEG 同步回放
+14. **AI 智能小结必须实现**，使用模板填空生成，必须经医生确认后才能进入报告
+15. **代码注释充分**，复杂逻辑（滤波、特征提取、AI 追问决策树）必须注释
+16. **不使用任何 UI 组件库**（MUI / Ant Design / Chakra），全部从零用 Tailwind + CSS 实现
+17. **视觉效果达到医疗 SaaS 产品标准**——这是展示给投资人和临床合作方的演示系统
+18. **产品定位贯穿全文案**：所有"实时预警"叙事降权，"家庭长程监测+诊断辅助"叙事突出
+
+---
+
+## PART 13 · 临床顾问反馈映射（v2，便于追溯）
+
+本版本所有重大调整均可追溯到郭老师临床访谈：
+
+| 临床反馈 | 对应实现位置 |
+|---------|------------|
+| 发作前诱因和前驱症状最重要 | PART 5.3 三段式记录的第 1 步（发作前），AI 引导式追问 |
+| 每次发作需记录发作前/中/后 + 类型 | PART 5.3.2 三段式表单 + clinical.ts 中 SeizureEvent.pre/ictal/post |
+| 既往史（脑炎/脑外伤/出生时问题/热性惊厥）| PART 5.2 我的档案，章节 2 |
+| EEG/MRI/PET-CT 检查资料 | PART 5.2 我的档案，章节 5 |
+| 心理评估量表 | PART 5.2 我的档案，章节 6（QOLIE-31/BDI/NDDI-E） |
+| 居家场景应做回顾性记录 | PART -1 产品定位 + PART 5.1 文案 + PART 9.2 紧急覆盖降级 |
+| 原始 EEG 必须有，NIRS 价值有限 | PART 7.3 波形回溯：EEG 主显，NIRS 折叠 |
+| 患者症状描述 + 旁观者描述非常需要 | PART 7.3 症状描述面板（固定显示） |
+| 算法标注 + 原始 EEG 可视化报告 | PART 7.3 注解层 + PART 7.6 报告字段 |
+| 患者个人档案整合所有资料 | PART 7.1 患者档案中心 |
+| 发作事件管理 + 趋势图 | PART 7.1 事件历史 Tab + PART 7.2 病情热力图 |
+| AI 辅助小结 | PART 7.4 AI 智能小结页 |
+| 医患沟通：轻量级、可控、医生可开关 | PART 7.5 医患沟通模块 + PART 5.5 患者端沟通页 |
+| AI 引导式追问"心情不好"等模糊诱因 | PART 5.3.1 AI 引导式诱因记录 + src/ai/TriggerInterview |
+| 家庭长程监测（睡眠中发作） | PART 0 监测模式 + PART 8 睡眠监测时段配置 |
+| 卧室视频联动 → 家庭简易脑电监测单元 | PART 6.2 视频联动页 + PART 7.3 视频联动同步回放 |
+
+---
+
+> 开始编码。先输出完整 `package.json`，然后按文件结构逐文件输出，每个文件完整，不省略。
+> 特别注意：本次是 v2 版本，所有与 v1 描述冲突的地方以本文件为准。
