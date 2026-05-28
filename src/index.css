@@ -27,6 +27,10 @@
   --emg-color: #F0883E;
   --accent: #0A84FF;
   --accent-dim: rgba(10, 132, 255, 0.15);
+  --chat-online: #2EA043;
+  --chat-offline: #6E7681;
+  --chat-bubble-doctor: #1F2A3D;
+  --chat-bubble-patient: #1E2A1E;
   --heat-0: #161B22;
   --heat-1: #0E4429;
   --heat-2: #006D32;

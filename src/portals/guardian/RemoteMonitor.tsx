@@ -3,6 +3,7 @@ import { useAppStore } from '../../store'
 
 export function RemoteMonitor(): JSX.Element {
   const patient = useAppStore((state) => state.patients[0])
+  const monitoringMode = useAppStore((state) => state.monitoringMode)
   const riskScore = useAppStore((state) => state.riskScore)
   const alerts = useAppStore((state) => state.alerts)
   const pushAlert = useAppStore((state) => state.pushAlert)
@@ -34,6 +35,7 @@ export function RemoteMonitor(): JSX.Element {
   return (
     <div className="grid h-full grid-rows-[200px_300px_1fr] gap-4">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
+        <div className="mb-2 text-xs text-text-secondary">远程关注 · 事件回顾 · 当前模式 {monitoringMode}</div>
         <div className="grid grid-cols-3 gap-3">
           <div>
             <div className="text-sm text-text-secondary">患者</div>
@@ -53,6 +55,7 @@ export function RemoteMonitor(): JSX.Element {
       </section>
 
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
+        <div className="mb-2 text-xs text-text-secondary">远程关注 · 事件回顾 · 当前模式 {monitoringMode}</div>
         <div className="flex items-center justify-between text-sm text-text-secondary">
           <span>患者位置可视化</span>
           <span>最后更新 {Math.max(0, Math.floor((Date.now() - lastLocationUpdate) / 1000))} 秒前</span>
@@ -81,6 +84,7 @@ export function RemoteMonitor(): JSX.Element {
       </section>
 
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
+        <div className="mb-2 text-xs text-text-secondary">远程关注 · 事件回顾 · 当前模式 {monitoringMode}</div>
         <div className="mb-3 flex justify-end gap-2 text-xs">
           <button
             className="rounded border border-border-default px-2 py-1"
@@ -114,13 +118,14 @@ export function RemoteMonitor(): JSX.Element {
               <th className="text-left">时间</th>
               <th className="text-left">事件</th>
               <th className="text-left">持续时长</th>
+              <th className="text-left">视频关联</th>
               <th className="text-left">状态</th>
             </tr>
           </thead>
           <tbody>
             {alertRows.length === 0 ? (
               <tr className="border-t border-border-subtle text-text-secondary">
-                <td colSpan={5} className="py-3">
+                <td colSpan={6} className="py-3">
                   暂无报警记录
                 </td>
               </tr>
@@ -133,6 +138,7 @@ export function RemoteMonitor(): JSX.Element {
                   <td>{row.time}</td>
                   <td>{row.event}</td>
                   <td>{row.duration}</td>
+                  <td>{row.level === '红色' ? '▶ 有' : '— 无'}</td>
                   <td>{row.status}</td>
                 </tr>
               ))

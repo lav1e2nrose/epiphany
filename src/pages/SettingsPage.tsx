@@ -6,14 +6,13 @@ const FALLBACK_SERIAL_PORT = 'COM3'
 export function SettingsPage(): JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const setDataSourceMode = useAppStore((state) => state.setDataSourceMode)
+  const setMonitoringMode = useAppStore((state) => state.setMonitoringMode)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [status, setStatus] = useState('')
   const [statusTone, setStatusTone] = useState<'idle' | 'ok' | 'warn'>('idle')
   const [loading, setLoading] = useState(false)
   const [serialPorts, setSerialPorts] = useState<string[]>([])
   const [bleDevices, setBleDevices] = useState<string[]>([])
-  const [systemBusy, setSystemBusy] = useState<'none' | 'update' | 'clear' | 'diag'>('none')
-  const [lastDiagnosticPath, setLastDiagnosticPath] = useState('')
 
   const testConnection = async (): Promise<void> => {
     setLoading(true)
@@ -60,11 +59,7 @@ export function SettingsPage(): JSX.Element {
         <div className="mt-3 space-y-2 text-sm">
           {(Object.keys(modeText) as Array<keyof typeof modeText>).map((mode) => (
             <label key={mode} className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={settings.dataSourceMode === mode}
-                onChange={() => setDataSourceMode(mode)}
-              />
+              <input type="radio" checked={settings.dataSourceMode === mode} onChange={() => setDataSourceMode(mode)} />
               {modeText[mode]}
             </label>
           ))}
@@ -76,9 +71,7 @@ export function SettingsPage(): JSX.Element {
           </label>
           <label>串口
             <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.serialPort} onChange={(event) => updateSettings({ serialPort: event.target.value })}>
-              {(serialPorts.length > 0 ? serialPorts : [settings.serialPort || FALLBACK_SERIAL_PORT]).map((port) => (
-                <option key={port} value={port}>{port}</option>
-              ))}
+              {(serialPorts.length > 0 ? serialPorts : [settings.serialPort || FALLBACK_SERIAL_PORT]).map((port) => <option key={port} value={port}>{port}</option>)}
             </select>
           </label>
           <label>波特率
@@ -87,9 +80,7 @@ export function SettingsPage(): JSX.Element {
           <label>BLE 设备
             <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.bleDeviceId} onChange={(event) => updateSettings({ bleDeviceId: event.target.value })}>
               <option value="">未选择</option>
-              {bleDevices.map((device) => (
-                <option key={device} value={device}>{device}</option>
-              ))}
+              {bleDevices.map((device) => <option key={device} value={device}>{device}</option>)}
             </select>
           </label>
         </div>
@@ -98,187 +89,104 @@ export function SettingsPage(): JSX.Element {
           <button className="rounded border border-border-default px-3 py-1 disabled:opacity-50" onClick={() => void testConnection()} disabled={loading}>
             {loading ? '连接测试中...' : '测试连接'}
           </button>
-          <button
-            className="rounded border border-border-default px-3 py-1"
-            onClick={() =>
-              void window.epiphany
-                ?.listSerialPorts()
-                .then((ports) => {
-                  setSerialPorts(ports ?? [])
-                  setStatus('串口列表已刷新')
-                  setStatusTone('ok')
-                })
-                .catch((error: unknown) => {
-                  const message = error instanceof Error ? error.message : '串口扫描失败'
-                  setStatus(`串口扫描失败 ✕ ${message}`)
-                  setStatusTone('warn')
-                })
-            }
-          >
-            刷新串口
-          </button>
-          <button
-            className="rounded border border-border-default px-3 py-1"
-            onClick={() =>
-              void window.epiphany
-                ?.scanBleDevices()
-                .then((devices) => {
-                  setBleDevices(devices ?? [])
-                  setStatus('BLE 设备扫描完成')
-                  setStatusTone('ok')
-                })
-                .catch((error: unknown) => {
-                  const message = error instanceof Error ? error.message : 'BLE 扫描失败'
-                  setStatus(`BLE 扫描失败 ✕ ${message}`)
-                  setStatusTone('warn')
-                })
-            }
-          >
-            扫描 BLE
-          </button>
+          <button className="rounded border border-border-default px-3 py-1" onClick={() => void window.epiphany?.listSerialPorts().then((ports) => setSerialPorts(ports ?? []))}>刷新串口</button>
+          <button className="rounded border border-border-default px-3 py-1" onClick={() => void window.epiphany?.scanBleDevices().then((devices) => setBleDevices(devices ?? []))}>扫描 BLE</button>
           <span className={`text-xs ${statusTone === 'ok' ? 'text-safe' : statusTone === 'warn' ? 'text-danger' : 'text-text-secondary'}`}>{status}</span>
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-4">
-        <h2 className="font-semibold">信号处理参数</h2>
-        <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-          <label>带通低频
-            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.bandpassLow} onChange={(event) => updateSettings({ bandpassLow: Number(event.target.value) })} />
+      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm">
+        <h2 className="font-semibold">监测模式</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {[
+            ['daytime', '日间监测（默认）'],
+            ['sleep', '睡眠监测（夜间算法+视频联动）'],
+            ['inpatient', '院内监测（实时预警）'],
+          ].map(([mode, label]) => (
+            <label key={mode} className="rounded border border-border-default bg-bg-3 px-2 py-2 text-xs">
+              <input
+                type="radio"
+                checked={settings.monitoringMode === mode}
+                onChange={() => setMonitoringMode(mode as 'daytime' | 'sleep' | 'inpatient')}
+              />{' '}
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <label>睡眠监测开始
+            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.sleepStartHour} onChange={(event) => updateSettings({ sleepStartHour: event.target.value })} />
           </label>
-          <label>带通高频
-            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.bandpassHigh} onChange={(event) => updateSettings({ bandpassHigh: Number(event.target.value) })} />
+          <label>睡眠监测结束
+            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.sleepEndHour} onChange={(event) => updateSettings({ sleepEndHour: event.target.value })} />
           </label>
-          <label>EMG 阈值
-            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.emgThreshold} onChange={(event) => updateSettings({ emgThreshold: Number(event.target.value) })} />
-          </label>
-          <label>陷波
-            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.notchHz} onChange={(event) => updateSettings({ notchHz: Number(event.target.value) as 50 | 60 })}>
-              <option value={50}>50Hz</option>
-              <option value={60}>60Hz</option>
+        </div>
+      </section>
+
+      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm">
+        <h2 className="font-semibold">视频联动</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <label>摄像头来源
+            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.cameraSource} onChange={(event) => updateSettings({ cameraSource: event.target.value as 'builtin' | 'usb' | 'ip' })}>
+              <option value="builtin">内置摄像头</option>
+              <option value="usb">USB 摄像头</option>
+              <option value="ip">IP 摄像头</option>
             </select>
           </label>
-          <label>预警灵敏度
-            <input type="range" min={0} max={1} step={0.05} className="mt-3 w-full" value={settings.sensitivity} onChange={(event) => updateSettings({ sensitivity: Number(event.target.value) })} />
+          <label>IP 地址
+            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.cameraUrl} onChange={(event) => updateSettings({ cameraUrl: event.target.value })} />
+          </label>
+          <label>自动联动
+            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={String(settings.autoVideoLink)} onChange={(event) => updateSettings({ autoVideoLink: event.target.value === 'true' })}>
+              <option value="true">开</option>
+              <option value="false">关</option>
+            </select>
+          </label>
+          <label>事件前预录（秒）
+            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.videoPreRecordSec} onChange={(event) => updateSettings({ videoPreRecordSec: Number(event.target.value) })} />
+          </label>
+          <label>事件后续录（分钟）
+            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.videoPostRecordMin} onChange={(event) => updateSettings({ videoPostRecordMin: Number(event.target.value) })} />
+          </label>
+          <label>本地保留天数
+            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.localRetentionDays} onChange={(event) => updateSettings({ localRetentionDays: Number(event.target.value) })} />
           </label>
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-4">
-        <h2 className="font-semibold">通知配置</h2>
-        <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-          <label>监护人手机号
-            <input className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.caregiverPhone} onChange={(event) => updateSettings({ caregiverPhone: event.target.value })} />
-          </label>
-          <label>报警音效
-            <div className="mt-2 flex gap-3">
-              <label className="flex items-center gap-1">
-                <input type="radio" checked={settings.alertSound} onChange={() => updateSettings({ alertSound: true })} />
-                开
-              </label>
-              <label className="flex items-center gap-1">
-                <input type="radio" checked={!settings.alertSound} onChange={() => updateSettings({ alertSound: false })} />
-                关
-              </label>
-            </div>
-          </label>
-          <label>预警提前量（分钟）
-            <input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.warningLeadMinutes} onChange={(event) => updateSettings({ warningLeadMinutes: Number(event.target.value) })} />
+      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm">
+        <h2 className="font-semibold">语音识别</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <label className="rounded border border-border-default bg-bg-3 px-2 py-2"><input type="radio" checked={settings.voiceInputEnabled} onChange={() => updateSettings({ voiceInputEnabled: true })} /> 启用语音输入</label>
+          <label className="rounded border border-border-default bg-bg-3 px-2 py-2"><input type="radio" checked={!settings.voiceInputEnabled} onChange={() => updateSettings({ voiceInputEnabled: false })} /> 关闭语音输入</label>
+          <label>识别语言
+            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.voiceLanguage} onChange={(event) => updateSettings({ voiceLanguage: event.target.value as 'zh-CN' })}>
+              <option value="zh-CN">中文 (zh-CN)</option>
+            </select>
           </label>
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm text-text-secondary">
-        <h2 className="font-semibold text-text-primary">系统信息</h2>
-        <div className="mt-2">应用版本 v1.0.0 · 算法版本 EpiNet-v2.3.1 · 数据格式 SignalFrame v1</div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <button
-            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
-            disabled={systemBusy !== 'none'}
-            onClick={() =>
-              void (async () => {
-                if (!window.epiphany?.checkForUpdates) {
-                  setStatus('检查更新接口不可用（当前为浏览器模式）')
-                  setStatusTone('warn')
-                  return
-                }
-                setSystemBusy('update')
-                try {
-                  const result = await window.epiphany.checkForUpdates()
-                  setStatus(result.message)
-                  setStatusTone(result.ok ? 'ok' : 'warn')
-                } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '检查更新失败，请检查网络连接或稍后重试')
-                  setStatusTone('warn')
-                } finally {
-                  setSystemBusy('none')
-                }
-              })()
-            }
-          >
-            {systemBusy === 'update' ? '检查中...' : '检查更新'}
-          </button>
-          <button
-            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
-            disabled={systemBusy !== 'none'}
-            onClick={() =>
-              void (async () => {
-                if (!window.epiphany?.clearLocalCache) {
-                  setStatus('清除缓存接口不可用（当前为浏览器模式）')
-                  setStatusTone('warn')
-                  return
-                }
-                setSystemBusy('clear')
-                try {
-                  const result = await window.epiphany.clearLocalCache()
-                  setStatus(result.message)
-                  setStatusTone(result.ok ? 'ok' : 'warn')
-                } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '清除缓存失败，请重试或联系技术支持')
-                  setStatusTone('warn')
-                } finally {
-                  setSystemBusy('none')
-                }
-              })()
-            }
-          >
-            {systemBusy === 'clear' ? '清理中...' : '清除本地缓存'}
-          </button>
-          <button
-            className="rounded border border-border-default px-3 py-1 disabled:opacity-50"
-            disabled={systemBusy !== 'none'}
-            onClick={() =>
-              void (async () => {
-                if (!window.epiphany?.exportDiagnosticLog) {
-                  setStatus('导出诊断日志接口不可用（当前为浏览器模式）')
-                  setStatusTone('warn')
-                  return
-                }
-                setSystemBusy('diag')
-                try {
-                  const result = await window.epiphany.exportDiagnosticLog()
-                  setLastDiagnosticPath(result.filePath ?? '')
-                  setStatus(result.filePath ? `${result.message}：${result.filePath}` : result.message)
-                  setStatusTone(result.ok ? 'ok' : 'warn')
-                } catch (error) {
-                  setStatus(error instanceof Error ? error.message : '导出诊断日志失败，请确认磁盘空间后重试')
-                  setStatusTone('warn')
-                } finally {
-                  setSystemBusy('none')
-                }
-              })()
-            }
-          >
-            {systemBusy === 'diag' ? '导出中...' : '导出诊断日志'}
-          </button>
-          {lastDiagnosticPath && (
-            <button
-              className="rounded border border-border-default px-3 py-1"
-              onClick={() => void window.epiphany?.showItemInFolder?.(lastDiagnosticPath)}
-            >
-              定位诊断日志文件
-            </button>
-          )}
+      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm">
+        <h2 className="font-semibold">医患沟通</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <label className="rounded border border-border-default bg-bg-3 px-2 py-2"><input type="checkbox" checked={settings.chatDesktopNotify} onChange={(event) => updateSettings({ chatDesktopNotify: event.target.checked })} /> 桌面通知</label>
+          <label className="rounded border border-border-default bg-bg-3 px-2 py-2"><input type="checkbox" checked={settings.chatBadgeNotify} onChange={(event) => updateSettings({ chatBadgeNotify: event.target.checked })} /> 应用角标</label>
+          <label>默认通道策略
+            <select className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.chatDefaultPolicy} onChange={(event) => updateSettings({ chatDefaultPolicy: event.target.value as 'auto_open' | 'manual_open' })}>
+              <option value="auto_open">新患者自动开启</option>
+              <option value="manual_open">手动开启</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-md border border-border-default bg-bg-2 p-4 text-sm">
+        <h2 className="font-semibold">信号处理参数</h2>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <label>带通低频<input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.bandpassLow} onChange={(event) => updateSettings({ bandpassLow: Number(event.target.value) })} /></label>
+          <label>带通高频<input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.bandpassHigh} onChange={(event) => updateSettings({ bandpassHigh: Number(event.target.value) })} /></label>
+          <label>EMG 阈值<input type="number" className="mt-1 w-full rounded border border-border-default bg-bg-3 px-2 py-1" value={settings.emgThreshold} onChange={(event) => updateSettings({ emgThreshold: Number(event.target.value) })} /></label>
         </div>
       </section>
     </div>

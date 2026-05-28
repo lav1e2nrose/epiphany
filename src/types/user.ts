@@ -1,6 +1,7 @@
 import type { RiskState } from './signal'
 
 export type Portal = 'patient' | 'guardian' | 'doctor'
+export type MonitoringMode = 'daytime' | 'sleep' | 'inpatient'
 
 export interface User {
   id: string
@@ -24,12 +25,36 @@ export interface AppSettings {
   serialPort: string
   baudRate: number
   bleDeviceId: string
+
   notchHz: 50 | 60
   bandpassLow: number
   bandpassHigh: number
   emgThreshold: number
   sensitivity: number
+
   caregiverPhone: string
   alertSound: boolean
   warningLeadMinutes: number
+
+  monitoringMode: MonitoringMode
+  sleepStartHour: string
+  sleepEndHour: string
+
+  cameraSource: 'builtin' | 'usb' | 'ip'
+  cameraUrl: string
+  autoVideoLink: boolean
+  videoPreRecordSec: number
+  videoPostRecordMin: number
+  faceBlurEnabled: boolean
+  localRetentionDays: number
+
+  voiceInputEnabled: boolean
+  voiceLanguage: 'zh-CN'
+  voiceHoldToRecord: boolean
+
+  chatDesktopNotify: boolean
+  chatBadgeNotify: boolean
+  quietHoursStart: string
+  quietHoursEnd: string
+  chatDefaultPolicy: 'auto_open' | 'manual_open'
 }

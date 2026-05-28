@@ -6,9 +6,9 @@ import { useAppStore } from '../store'
 import type { Portal } from '../types/user'
 
 const cards: Array<{ role: Portal; title: string; subtitle: string }> = [
-  { role: 'patient', title: '👤 患者', subtitle: '个人健康管理与预警' },
-  { role: 'guardian', title: '👨‍👩‍👧 监护人', subtitle: '家庭守护与远程监控' },
-  { role: 'doctor', title: '🩺 医生', subtitle: '临床管理与数据分析' },
+  { role: 'patient', title: '👤 患者', subtitle: '个人健康记录 · 智能诱因采集' },
+  { role: 'guardian', title: '👨‍👩‍👧 监护人', subtitle: '远程守护 · 视频联动' },
+  { role: 'doctor', title: '🩺 医生', subtitle: '临床档案 · 诊断辅助 · 患者沟通' },
 ]
 const SHAKE_DURATION_MS = 300
 
@@ -36,7 +36,7 @@ export function LoginScreen(): JSX.Element {
     setPhaseText('正在验证身份...')
     setSubmitting(true)
     window.setTimeout(() => setPhaseText('正在进入工作台...'), 220)
-    window.setTimeout(() => login({ id: 'demo', name: 'Demo User', role }), 500)
+    window.setTimeout(() => login({ id: role === 'patient' ? 'p1' : role === 'doctor' ? 'doc-1' : 'guardian-1', name: role === 'doctor' ? '张医生' : role === 'patient' ? '李明' : '家属', role }), 500)
   }
 
   return (
@@ -48,7 +48,7 @@ export function LoginScreen(): JSX.Element {
           <div className="inline-flex items-center gap-2 text-2xl font-semibold">
             <Brain className="text-accent" /> 灵犀妙探
           </div>
-          <p className="mt-2 text-text-secondary">智能癫痫全周期监测平台</p>
+          <p className="mt-2 text-text-secondary">家庭癫痫长程监测 + 诊断辅助平台</p>
           <p className={`mt-1 text-xs ${errorText ? 'text-danger' : 'text-text-muted'}`}>{phaseText}</p>
         </motion.div>
 
