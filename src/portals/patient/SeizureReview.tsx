@@ -29,7 +29,7 @@ export function SeizureReview(): JSX.Element {
             <div className="rounded border border-border-default bg-bg-3 p-2"><b>发作前：</b>{active.pre.triggers[0]?.category ?? '未填'} · {active.pre.aura[0]?.description ?? '无'}</div>
             <div className="rounded border border-border-default bg-bg-3 p-2"><b>发作中：</b>{active.ictal.symptoms.join(' / ') || '无'}</div>
             <div className="rounded border border-border-default bg-bg-3 p-2"><b>发作后：</b>{active.post.state} · {active.post.recoveryDurationMin} 分钟</div>
-            <div className="rounded border border-border-default bg-bg-3 p-2">简化波形缩略：|||| |||| |||||</div>
+            <div className="rounded border border-border-default bg-bg-3 p-2">简化波形缩略：[Waveform Preview 示意图]</div>
             <div className="rounded border border-border-default bg-bg-3 p-2">医生备注：{active.doctorReview?.annotation ?? '暂无'}</div>
           </div>
         ) : <div className="mt-2 text-text-secondary">暂无事件</div>}

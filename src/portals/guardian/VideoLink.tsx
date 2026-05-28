@@ -8,6 +8,7 @@ export function VideoLink(): JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [selectedClipId, setSelectedClipId] = useState<string | null>(clips[0]?.id ?? null)
+  const modeLabel = monitoringMode === 'daytime' ? '日间监测' : monitoringMode === 'sleep' ? '睡眠监测' : '院内监测'
 
   return (
     <div className="grid h-full grid-rows-[auto_1fr] gap-3 overflow-auto">
@@ -17,7 +18,7 @@ export function VideoLink(): JSX.Element {
             <div className="font-semibold">视频联动 · 卧室摄像头</div>
             <div className="text-xs text-text-secondary">状态：● 已连接 · 联动模式：异常事件自动录制</div>
           </div>
-          <div className="text-xs text-text-secondary">当前监测模式：{monitoringMode}</div>
+          <div className="text-xs text-text-secondary">当前监测模式：{modeLabel}</div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           <label className="flex items-center gap-1 rounded border border-border-default px-2 py-1">
