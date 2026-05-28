@@ -1,5 +1,6 @@
 import { Activity, Minus, MonitorUp, X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { MonitoringModeBadge } from './MonitoringModeBadge'
 import { PortalSwitcher } from './PortalSwitcher'
 
 export function TitleBar(): JSX.Element {
@@ -14,14 +15,18 @@ export function TitleBar(): JSX.Element {
         : 'bg-text-muted'
 
   return (
-    <header className="title-bar flex h-10 items-center justify-between border-b border-border-subtle bg-bg-1 px-3">
+    <header className="title-bar flex h-12 items-center justify-between border-b border-border-subtle bg-bg-1 px-3">
       <div className="flex items-center gap-2">
         <Activity size={16} className="text-accent" />
-        <div className="font-display text-sm font-semibold tracking-wider">灵犀妙探</div>
+        <div>
+          <div className="font-display text-sm font-semibold tracking-wider">灵犀妙探</div>
+          <div className="text-[10px] text-text-secondary">家庭长程监测 · 诊断辅助</div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <PortalSwitcher />
+        <MonitoringModeBadge />
         <div className="flex items-center gap-2 rounded-md border border-border-default px-2 py-1 text-xs">
           <span className={`h-2 w-2 rounded-full ${liveClass}`} />
           <span className="font-mono">LIVE</span>

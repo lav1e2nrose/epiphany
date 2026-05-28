@@ -21,6 +21,7 @@ function progressClass(type: 'info' | 'warning' | 'error' | 'success' | 'sos'): 
 
 export function AlertToast(): JSX.Element {
   const alerts = useAppStore((state) => state.alerts)
+  const monitoringMode = useAppStore((state) => state.monitoringMode)
   const dismiss = useAppStore((state) => state.dismissAlert)
   const [now, setNow] = useState(Date.now())
 
@@ -37,14 +38,23 @@ export function AlertToast(): JSX.Element {
     return () => window.clearInterval(timer)
   }, [alerts])
 
-  const visibleAlerts = useMemo(() => alerts.filter((a) => !a.sticky).slice(-3), [alerts])
+  const visibleAlerts = useMemo(() => {
+    const transient = alerts.filter((alert) => !alert.sticky)
+    const persistentHome =
+      monitoringMode === 'inpatient'
+        ? []
+        : alerts
+            .filter((alert) => alert.sticky && (alert.type === 'error' || alert.type === 'sos'))
+            .map((alert) => ({ ...alert, title: '事件已记录', message: '已保存关键事件，请在复诊时由医生回顾。' }))
+    return [...transient, ...persistentHome].slice(-3)
+  }, [alerts, monitoringMode])
 
   return (
     <div className="fixed right-4 top-14 z-[5000] space-y-2">
       <AnimatePresence>
         {visibleAlerts.map((alert) => (
           <motion.div
-            key={alert.id}
+            key={`${alert.id}-${alert.sticky ? 'sticky' : 'normal'}`}
             variants={MOTION_TOAST_VARIANTS}
             initial="initial"
             animate="animate"

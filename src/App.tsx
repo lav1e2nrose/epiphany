@@ -19,6 +19,7 @@ export default function App(): JSX.Element {
   const updateEventHandling = useAppStore((state) => state.updateEventHandling)
   const hydratePersistedState = useAppStore((state) => state.hydratePersistedState)
   const riskScore = useAppStore((state) => state.riskScore)
+  const monitoringMode = useAppStore((state) => state.monitoringMode)
   const emergencyAlert = useMemo(
     () => [...alerts].reverse().find((alert) => alert.sticky && (alert.type === 'error' || alert.type === 'sos')) ?? null,
     [alerts],
@@ -60,7 +61,7 @@ export default function App(): JSX.Element {
       </AnimatePresence>
       <AlertToast />
       <EmergencyOverlay
-        visible={Boolean(currentUser && currentPortal === 'guardian' && emergencyAlert)}
+        visible={Boolean(currentUser && currentPortal === 'guardian' && emergencyAlert && monitoringMode === 'inpatient')}
         title={emergencyAlert?.type === 'sos' ? 'SOS 紧急求助' : '高危报警'}
         message={emergencyAlert?.message}
         locationText={DEFAULT_EMERGENCY_LOCATION}

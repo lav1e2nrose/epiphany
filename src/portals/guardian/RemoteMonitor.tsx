@@ -1,12 +1,20 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
 
+const modeLabelMap = {
+  daytime: '日间监测',
+  sleep: '睡眠监测',
+  inpatient: '院内监测',
+} as const
+
 export function RemoteMonitor(): JSX.Element {
   const patient = useAppStore((state) => state.patients[0])
+  const monitoringMode = useAppStore((state) => state.monitoringMode)
   const riskScore = useAppStore((state) => state.riskScore)
   const alerts = useAppStore((state) => state.alerts)
   const pushAlert = useAppStore((state) => state.pushAlert)
   const addEvent = useAppStore((state) => state.addEvent)
+  const modeText = modeLabelMap[monitoringMode]
   const lastLocationUpdate = useMemo(() => alerts[0]?.timestamp ?? Date.now() - 23 * 1000, [alerts])
   const alertRows = useMemo(
     () =>
@@ -34,6 +42,7 @@ export function RemoteMonitor(): JSX.Element {
   return (
     <div className="grid h-full grid-rows-[200px_300px_1fr] gap-4">
       <section className="rounded-md border border-border-default bg-bg-2 p-4">
+        <div className="mb-2 text-xs text-text-secondary">远程关注 · 事件回顾 · 当前模式 {modeText}</div>
         <div className="grid grid-cols-3 gap-3">
           <div>
             <div className="text-sm text-text-secondary">患者</div>
@@ -69,12 +78,8 @@ export function RemoteMonitor(): JSX.Element {
               <circle r="28" fill="rgba(10,132,255,0.2)" className="animate-pulse" />
               <path d="M0,-18 C9,-18 16,-11 16,-2 C16,9 0,24 0,24 C0,24 -16,9 -16,-2 C-16,-11 -9,-18 0,-18 Z" fill="var(--danger)" />
               <circle cy="-3" r="5" fill="#fff" />
-              <text x="18" y="-12" fontSize="12" fill="#E6EDF3">
-                患者位置
-              </text>
-              <text x="18" y="6" fontSize="11" fill="#8B949E">
-                上海市徐汇区
-              </text>
+              <text x="18" y="-12" fontSize="12" fill="#E6EDF3">患者位置</text>
+              <text x="18" y="6" fontSize="11" fill="#8B949E">上海市徐汇区</text>
             </g>
           </svg>
         </div>
@@ -114,25 +119,23 @@ export function RemoteMonitor(): JSX.Element {
               <th className="text-left">时间</th>
               <th className="text-left">事件</th>
               <th className="text-left">持续时长</th>
+              <th className="text-left">视频关联</th>
               <th className="text-left">状态</th>
             </tr>
           </thead>
           <tbody>
             {alertRows.length === 0 ? (
               <tr className="border-t border-border-subtle text-text-secondary">
-                <td colSpan={5} className="py-3">
-                  暂无报警记录
-                </td>
+                <td colSpan={6} className="py-3">暂无报警记录</td>
               </tr>
             ) : (
               alertRows.map((row) => (
                 <tr key={row.id} className="border-t border-border-subtle">
-                  <td className="py-2">
-                    <span className={`rounded px-2 py-0.5 text-xs ${row.badgeClass}`}>{row.level}</span>
-                  </td>
+                  <td className="py-2"><span className={`rounded px-2 py-0.5 text-xs ${row.badgeClass}`}>{row.level}</span></td>
                   <td>{row.time}</td>
                   <td>{row.event}</td>
                   <td>{row.duration}</td>
+                  <td>{row.level === '红色' ? '▶ 有' : '— 无'}</td>
                   <td>{row.status}</td>
                 </tr>
               ))

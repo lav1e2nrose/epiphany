@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFlashKey } from '../../hooks/useFlashKey'
 import { MOTION_MODAL_BACKDROP, MOTION_MODAL_CONTENT, MOTION_TRANSITION_FAST, MOTION_TRANSITION_SPRING } from '../../constants/motion'
 import { ArtifactBanner } from '../../components/ArtifactBanner'
+import { RecordPromptBanner } from '../../components/RecordPromptBanner'
 import { EmergencyOverlay } from '../../components/EmergencyOverlay'
 import { SOSButton } from '../../components/SOSButton'
 import { StatusOrb } from '../../components/StatusOrb'
@@ -79,6 +80,7 @@ export function LiveDashboard(): JSX.Element {
   const addEvent = useAppStore((state) => state.addEvent)
   const updateEventHandling = useAppStore((state) => state.updateEventHandling)
   const updateAlertHandling = useAppStore((state) => state.updateAlertHandling)
+  const requestPage = useAppStore((state) => state.requestPage)
   const [emergencyVisible, setEmergencyVisible] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
   const [connectStartTs, setConnectStartTs] = useState<number | null>(null)
@@ -230,6 +232,7 @@ export function LiveDashboard(): JSX.Element {
   )
 
   const seizureModalVisible = riskState === 'warning' || riskState === 'seizure'
+  const pendingRecord = events.find((event) => event.type === 'alert' && event.handlingStatus === 'pending')
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -313,7 +316,15 @@ export function LiveDashboard(): JSX.Element {
         </div>
       </div>
       <div className="space-y-3">
-        <ArtifactBanner visible={hasMovementArtifact} message="监测到较强肢体活动干扰 · 预警精度暂时受限 · 建议保持平稳" />
+        <RecordPromptBanner
+          visible={Boolean(pendingRecord)}
+          onRecord={() => requestPage('smart-log')}
+          onLater={() => {
+            if (!pendingRecord) return
+            updateEventHandling(pendingRecord.id, 'acknowledged')
+          }}
+        />
+        <ArtifactBanner visible={hasMovementArtifact} message="监测到较强肢体活动干扰 · 数据质量暂时受限 · 建议保持平稳" />
         <WaveformChart title="EEG" unit="μV" frames={frameBuffer} selector={(f) => f.eeg[0] ?? 0} color="#39D0D8" annotateSeizure annotateArtifacts />
         <WaveformChart title="NIRS" unit="%" frames={frameBuffer} selector={(f) => f.nirs.spo2} color="#A371F7" annotateArtifacts />
         <WaveformChart title="EMG" unit="μV" frames={frameBuffer} selector={(f) => f.emg[0] ?? 0} color="#F0883E" annotateArtifacts />
@@ -403,7 +414,7 @@ export function LiveDashboard(): JSX.Element {
             >
               <h3 className="text-lg font-semibold">监测到异常脑电特征</h3>
               <p className="mt-2 text-sm text-text-secondary">Pre-ictal 置信度 {(confidence * 100).toFixed(0)}%</p>
-              <p className="mt-1 text-sm text-text-secondary">预计 5-10 分钟内可能发作，请寻找安全位置。</p>
+              <p className="mt-1 text-sm text-text-secondary">系统已记录事件线索，建议补充发作前后描述，便于医生复诊回顾。</p>
               <div className="mt-4 flex justify-end gap-2">
                 <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('true_positive')}>确实发作了</button>
                 <button className="rounded-md border border-border-default px-3 py-1.5" onClick={() => submitFeedback('false_positive')}>这是误报</button>
