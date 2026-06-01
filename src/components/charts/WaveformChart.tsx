@@ -10,6 +10,7 @@ interface Props {
   color: string
   annotateSeizure?: boolean
   annotateArtifacts?: boolean
+  height?: number
 }
 
 type Speed = 25 | 50
@@ -33,6 +34,7 @@ export function WaveformChart({
   color,
   annotateSeizure = false,
   annotateArtifacts = false,
+  height = 130,
 }: Props): JSX.Element {
   const [speed, setSpeed] = useState<Speed>(25)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -157,9 +159,9 @@ export function WaveformChart({
         <span>{unit}</span>
       </div>
       <div className="relative">
-        <canvas ref={canvasRef} className="h-[130px] w-full rounded bg-bg-3" />
+        <canvas ref={canvasRef} className="w-full rounded bg-bg-3" style={{ height }} />
         {(annotateSeizure || annotateArtifacts) && (
-          <svg className="pointer-events-none absolute inset-0 h-[130px] w-full">
+          <svg className="pointer-events-none absolute inset-0 w-full" style={{ height }}>
             {segments.map((segment, idx) => {
               const w = 100 / Math.max(1, data.length)
               const x = segment.start * w
