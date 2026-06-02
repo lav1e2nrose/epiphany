@@ -185,6 +185,16 @@ const demoVideoClips: VideoClipMeta[] = [
     thumbnail: '🌙',
     fileUrl: '/mock-videos/clip-1.mp4',
   },
+  {
+    id: 'clip-2',
+    patientId: 'p1',
+    startAt: Date.now() - 3600 * 1000 * 73,
+    endAt: Date.now() - 3600 * 1000 * 73 + 68000,
+    durationSec: 68,
+    source: 'mock',
+    thumbnail: '🌙',
+    fileUrl: '/mock-videos/clip-2.mp4',
+  },
 ]
 
 function normalizeEvent(event: SeizureEvent): SeizureEvent {
@@ -257,9 +267,12 @@ export interface AppStore {
   aiSummaries: Record<string, AISummary[]>
   generateAISummary: (patientId: string, start: number, end: number) => Promise<AISummary>
   approveAISummary: (summaryId: string) => void
+  updateAISummary: (summaryId: string, patch: Partial<Pick<AISummary, 'highlights' | 'medicationAnalysis' | 'recommendations'>>) => void
+  discardAISummary: (summaryId: string) => void
 
   videoClips: VideoClipMeta[]
   addVideoClip: (clip: VideoClipMeta) => void
+  removeVideoClip: (id: string) => void
 
   reviewFocusTimestamp: number | null
   setReviewFocusTimestamp: (timestamp: number | null) => void
@@ -471,9 +484,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ])
       return { aiSummaries: Object.fromEntries(nextEntries) }
     }),
+  updateAISummary: (summaryId, patch) =>
+    set((state) => {
+      const nextEntries = Object.entries(state.aiSummaries).map(([patientId, summaries]) => [
+        patientId,
+        summaries.map((summary) => (summary.id === summaryId ? { ...summary, ...patch } : summary)),
+      ])
+      return { aiSummaries: Object.fromEntries(nextEntries) }
+    }),
+  discardAISummary: (summaryId) =>
+    set((state) => {
+      const nextEntries = Object.entries(state.aiSummaries).map(([patientId, summaries]) => [
+        patientId,
+        summaries.filter((summary) => summary.id !== summaryId),
+      ])
+      return { aiSummaries: Object.fromEntries(nextEntries) }
+    }),
 
   videoClips: demoVideoClips,
   addVideoClip: (clip) => set((state) => ({ videoClips: [clip, ...state.videoClips].slice(0, 120) })),
+  removeVideoClip: (id) => set((state) => ({ videoClips: state.videoClips.filter((clip) => clip.id !== id) })),
 
   reviewFocusTimestamp: null,
   setReviewFocusTimestamp: (timestamp) => set({ reviewFocusTimestamp: timestamp }),

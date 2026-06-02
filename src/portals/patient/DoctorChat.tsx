@@ -1,11 +1,14 @@
 import { ChannelStatusBadge } from '../../components/ChannelStatusBadge'
 import { ChatWindow } from '../../components/chat/ChatWindow'
 import { useAppStore } from '../../store'
+import type { ChatMessage } from '../../types/clinical'
+
+const EMPTY_MESSAGES: ChatMessage[] = []
 
 export function DoctorChat(): JSX.Element {
   const patientId = useAppStore((state) => state.currentUser?.id ?? 'p1')
   const channel = useAppStore((state) => state.chatChannels[patientId])
-  const messages = useAppStore((state) => state.chatMessages[patientId] ?? [])
+  const messages = useAppStore((state) => state.chatMessages[patientId] ?? EMPTY_MESSAGES)
   const sendChatMessage = useAppStore((state) => state.sendChatMessage)
 
   if (!channel || channel.status === 'closed') {

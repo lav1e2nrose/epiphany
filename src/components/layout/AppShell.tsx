@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   ActivitySquare,
   BookOpen,
@@ -158,19 +158,19 @@ export function AppShell(): JSX.Element {
       <div className="flex min-h-0 flex-1">
         <Sidebar items={nav} activeKey={activePage} onSelect={handleSelect} />
         <main className={`min-h-0 flex-1 overflow-hidden p-4 ${monitoringMode === 'sleep' ? 'bg-[#090d16]' : ''}`}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${currentPortal}-${activePage}`}
-              variants={makePageVariants(pageDirection)}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={MOTION_TRANSITION_FAST}
-              className="h-full"
-            >
-              {page}
-            </motion.div>
-          </AnimatePresence>
+          {/* 页面切换采用「按 key 重挂载 + 方向感知进入动画」，不使用 AnimatePresence(mode="wait")：
+              后者在频繁重渲染或进入某些页面（如视频联动）时会出现 exit 卡死、新页面永不挂载的问题。
+              这里去掉 exit 依赖，切换即时生效，仍保留前进/后退方向的 slide+fade 进场动画。 */}
+          <motion.div
+            key={`${currentPortal}-${activePage}`}
+            variants={makePageVariants(pageDirection)}
+            initial="initial"
+            animate="animate"
+            transition={MOTION_TRANSITION_FAST}
+            className="h-full"
+          >
+            {page}
+          </motion.div>
         </main>
       </div>
       {currentPortal === 'guardian' && monitoringMode === 'inpatient' && (

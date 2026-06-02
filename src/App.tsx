@@ -1,10 +1,9 @@
 import { useEffect, useMemo } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { AlertToast } from './components/AlertToast'
 import { EmergencyOverlay } from './components/EmergencyOverlay'
 import { MockModeBanner } from './components/MockModeBanner'
 import { AppShell } from './components/layout/AppShell'
-import { MOTION_TRANSITION_FAST } from './constants/motion'
 import { LoginScreen } from './pages/LoginScreen'
 import { useAppStore } from './store'
 
@@ -35,30 +34,24 @@ export default function App(): JSX.Element {
 
   return (
     <div>
-      <AnimatePresence mode="wait">
-        {!currentUser ? (
-          <motion.div
-            key="login-screen"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -24 }}
-            transition={MOTION_TRANSITION_FAST}
-          >
-            <LoginScreen />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main-shell"
-            initial={{ opacity: 0, y: 36 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-          >
-            <MockModeBanner />
-            <AppShell />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 登录态切换不使用 AnimatePresence(mode="wait")：该模式在登录瞬间偶发卡死
+          （exit 未触发 onExitComplete，主界面永不挂载）。改为条件渲染 + 进入动画，
+          确保设置 currentUser 后工作台立即可见，登录卡片飞出动画仍由 LoginScreen 内部完成。 */}
+      {!currentUser ? (
+        <motion.div key="login-screen" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
+          <LoginScreen />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="main-shell"
+          initial={{ opacity: 0, y: 36 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
+          <MockModeBanner />
+          <AppShell />
+        </motion.div>
+      )}
       <AlertToast />
       <EmergencyOverlay
         visible={Boolean(currentUser && currentPortal === 'guardian' && emergencyAlert && monitoringMode === 'inpatient')}
