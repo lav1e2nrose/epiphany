@@ -44,9 +44,9 @@ export function MedicalHistoryForm({ history, readOnly = false, onChange }: Prop
 
   return (
     <div className="space-y-4 text-sm">
-      <section className="rounded-md border border-border-default bg-bg-2 p-3">
+      <section data-section="history" className="rounded-md border border-border-default bg-bg-2 p-3">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold">既往疾病史（郭老师要求字段）</h3>
+          <h3 className="font-semibold">既往疾病史</h3>
           <span className="text-xs text-text-secondary">最后更新：{new Date(history.updatedAt).toLocaleString('zh-CN')}</span>
         </div>
         <div className="grid gap-2 md:grid-cols-2">
@@ -93,7 +93,7 @@ export function MedicalHistoryForm({ history, readOnly = false, onChange }: Prop
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-3">
+      <section data-section="medication" className="rounded-md border border-border-default bg-bg-2 p-3">
         <h3 className="font-semibold">用药记录</h3>
         <div className="mt-2 space-y-2 text-xs">
           {history.medications.map((medication, index) => (
@@ -198,7 +198,7 @@ export function MedicalHistoryForm({ history, readOnly = false, onChange }: Prop
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-3">
+      <section data-section="evolution" className="rounded-md border border-border-default bg-bg-2 p-3">
         <h3 className="font-semibold">发作演变</h3>
         <div className="mt-2 grid gap-3 text-xs md:grid-cols-2">
           <label className="flex flex-col gap-1">
@@ -261,7 +261,7 @@ export function MedicalHistoryForm({ history, readOnly = false, onChange }: Prop
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-3">
+      <section data-section="exam" className="rounded-md border border-border-default bg-bg-2 p-3">
         <h3 className="font-semibold">检查资料</h3>
         <div className="mt-2 space-y-2 text-xs">
           {history.examinations.map((exam, index) => (
@@ -352,7 +352,7 @@ export function MedicalHistoryForm({ history, readOnly = false, onChange }: Prop
         </div>
       </section>
 
-      <section className="rounded-md border border-border-default bg-bg-2 p-3">
+      <section data-section="questionnaire" className="rounded-md border border-border-default bg-bg-2 p-3">
         <QuestionnaireRunner questionnaires={history.questionnaires} disabled={readOnly} onChange={(next) => updateHistory({ questionnaires: next })} />
       </section>
     </div>

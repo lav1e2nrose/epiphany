@@ -1,10 +1,22 @@
 import { useState } from 'react'
-import type { AuraType, ClinicalSeizureEvent, SeizureType, TriggerRecord } from '../../types/clinical'
+import type { AuraType, ClinicalSeizureEvent, SeizureType, TriggerCategory, TriggerRecord } from '../../types/clinical'
 
 interface Props {
   patientId: string
   triggerRecord?: TriggerRecord
   onSubmit: (event: ClinicalSeizureEvent) => void
+}
+
+const triggerCategoryLabel: Record<TriggerCategory, string> = {
+  sleep_deprivation: '睡眠不足',
+  emotional_stress: '情绪压力',
+  missed_medication: '漏服药',
+  alcohol: '饮酒',
+  flashing_light: '闪光刺激',
+  fever: '发热',
+  menstruation: '经期相关',
+  fatigue: '劳累',
+  other: '其他',
 }
 
 const auraOptions: Array<{ value: AuraType; label: string }> = [
@@ -45,6 +57,12 @@ export function ThreePhaseRecorder({ patientId, triggerRecord, onSubmit }: Props
 
       {step === 0 && (
         <div className="space-y-2 text-sm">
+          {triggerRecord && (
+            <div className="rounded border border-safe/50 bg-safe/10 px-2 py-1.5 text-xs text-safe">
+              ✓ 已带入智能日志诱因：{triggerCategoryLabel[triggerRecord.category]}
+              （{triggerRecord.refinedAnswers.length} 项细节 · 严重度 {triggerRecord.severity}/5）
+            </div>
+          )}
           <div>先兆选择</div>
           <div className="flex flex-wrap gap-1">
             {auraOptions.map((option) => (

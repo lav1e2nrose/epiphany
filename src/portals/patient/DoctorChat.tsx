@@ -24,28 +24,30 @@ export function DoctorChat(): JSX.Element {
   }
 
   return (
-    <div className="h-full">
+    <div className="flex h-full flex-col">
       <div className="mb-2 flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">医生沟通 <ChannelStatusBadge channel={channel} /></div>
         <div className="text-xs text-text-secondary">医生 · 在线/离线（演示）</div>
       </div>
-      <ChatWindow
-        currentUserRole="patient"
-        messages={messages}
-        disabled={channel.status !== 'open'}
-        onSend={(content) =>
-          sendChatMessage({
-            id: `msg-${Date.now()}`,
-            patientId,
-            doctorId: channel.doctorId,
-            sender: 'patient',
-            type: 'text',
-            content,
-            timestamp: Date.now(),
-            read: false,
-          })
-        }
-      />
+      <div className="min-h-0 flex-1">
+        <ChatWindow
+          currentUserRole="patient"
+          messages={messages}
+          disabled={channel.status !== 'open'}
+          onSend={(content) =>
+            sendChatMessage({
+              id: `msg-${Date.now()}`,
+              patientId,
+              doctorId: channel.doctorId,
+              sender: 'patient',
+              type: 'text',
+              content,
+              timestamp: Date.now(),
+              read: false,
+            })
+          }
+        />
+      </div>
     </div>
   )
 }
